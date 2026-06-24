@@ -54,6 +54,10 @@ class CameraTrackingService : LifecycleService() {
     // Session (007)
     private var motionSensors: MotionSensors? = null
 
+    // Export (008)
+    private var csvWriter: CsvSessionWriter? = null
+    @Volatile private var lastCameraSensorTs = 0L
+
     override fun onCreate() {
         super.onCreate()
         analysisExecutor = Executors.newSingleThreadExecutor()
@@ -76,6 +80,9 @@ class CameraTrackingService : LifecycleService() {
         eventAccumulator.reset()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
+        getExternalFilesDir(null)?.let { dir ->
+            csvWriter = CsvSessionWriter(dir).apply { start("iris", "binocular", System.currentTimeMillis()) }
+        }
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
@@ -114,6 +121,7 @@ class CameraTrackingService : LifecycleService() {
             analysis.setAnalyzer(analysisExecutor) { image ->
                 val elapsed = SystemClock.elapsedRealtimeNanos()
                 val index = frameIndex++
+                lastCameraSensorTs = image.imageInfo.timestamp
                 logFrame(index, image.imageInfo.timestamp, elapsed)
                 TrackingStats.onFrame(elapsed)
                 maybeUpdateNotification(index + 1)
@@ -170,7 +178,9 @@ class CameraTrackingService : LifecycleService() {
         val frame = FaceSignalAdapter.toResult(result)
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
-        SessionRecorder.addSample(frame, SystemClock.elapsedRealtimeNanos())
+        val tNanos = SystemClock.elapsedRealtimeNanos()
+        SessionRecorder.addSample(frame, tNanos)
+        csvWriter?.appendSample(frame, tNanos, lastCameraSensorTs, "unknown")
         SessionStats.update(
             SessionSummary(
                 recording = true,
@@ -240,6 +250,44 @@ class CameraTrackingService : LifecycleService() {
 
     private fun fmt(value: Double): String = String.format(Locale.ROOT, "%.3f", value)
 
+    private fun finalizeSessionCsv() {
+        val writer = csvWriter ?: return
+        val samples = SessionRecorder.samples.toList()
+        val saccadeSamples = samples.map { s ->
+            val x = if (!s.leftX.isNaN()) s.leftX else s.rightX
+            val y = if (!s.leftY.isNaN()) s.leftY else s.rightY
+            SaccadeSample(
+                s.tElapsedNanos / 1_000_000, x, y, s.leftReliability,
+                s.leftBlink == BlinkState.CLOSED || s.leftBlink == BlinkState.CLOSING, true,
+            )
+        }
+        for (event in SaccadeDetector.detect(saccadeSamples)) writer.appendSaccade(event)
+        val blinkSamples = samples.map { BlinkSample(it.tElapsedNanos / 1_000_000, it.leftBlink) }
+        for (event in BlinkDetector.detect(blinkSamples)) writer.appendBlink(event)
+        val file = writer.finalizeSession()
+        csvWriter = null
+        Log.i(TAG, "Session CSV: ${file?.absolutePath}")
+        writeSensorSidecar()
+    }
+
+    private fun writeSensorSidecar() {
+        val sensors = SessionRecorder.sensorSamples.toList()
+        if (sensors.isEmpty()) return
+        try {
+            val file = File(getExternalFilesDir(null), "sensors_${System.currentTimeMillis()}.csv")
+            file.bufferedWriter().use { w ->
+                w.write("sensor,timestamp_nanos,v0,v1,v2")
+                w.newLine()
+                for (s in sensors) {
+                    w.write("${s.sensor},${s.tNanos},${fmt(s.v0.toDouble())},${fmt(s.v1.toDouble())},${fmt(s.v2.toDouble())}")
+                    w.newLine()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "sensor sidecar failed", t)
+        }
+    }
+
     private fun openLog() {
         try {
             val file = File(getExternalFilesDir(null), "frame_log_${System.currentTimeMillis()}.csv")
@@ -281,6 +329,7 @@ class CameraTrackingService : LifecycleService() {
 
     private fun stopTracking() {
         writeBenchmarkCsv()
+        finalizeSessionCsv()
         closeResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.example.saccadacusandroid.ui.theme.AppTheme
 import kotlinx.coroutines.delay
 
@@ -137,6 +138,13 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         ) {
             Text("Stop")
         }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            enabled = !running,
+            onClick = { shareLatestSession(context) },
+        ) {
+            Text("Export session CSV")
+        }
 
         Spacer(Modifier.height(24.dp))
         Text("Frames logged: ${snapshot.frameCount}")
@@ -192,4 +200,20 @@ private fun stopTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)
         .setAction(CameraTrackingService.ACTION_STOP)
     context.startService(intent)
+}
+
+private fun shareLatestSession(context: Context) {
+    val dir = context.getExternalFilesDir(null) ?: return
+    val csv = dir.listFiles()
+        ?.filter { it.name.startsWith("session_") && it.name.endsWith(".csv") }
+        ?.maxByOrNull { it.lastModified() } ?: return
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", csv)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(
+        Intent.createChooser(send, "Export session CSV").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
 }
