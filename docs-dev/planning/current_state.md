@@ -6,9 +6,13 @@ progress. Read it at session start. Records current reality; the binding canon i
 
 ## Systems
 
-- **Android scaffold only** — Kotlin + Jetpack Compose, single stub `MainActivity`,
-  committed Gradle wrapper, CI **Build APK** workflow. No camera, service, sensors, or
-  tracking code yet (manifest declares no permissions/services).
+- **Camera foreground-service probe (prompts 002 / 002b)** — a `camera`-type
+  `LifecycleService` runs CameraX front-camera `ImageAnalysis` and logs frame timing
+  (`frame_index, camera_sensor_timestamp, elapsed_realtime_nanos`) to a CSV in the app's
+  external files dir. A persistent notification (with Stop) and the activity show a live
+  frame count + "since last frame" + verdict, so the survival test needs no `adb`/CSV.
+  No tracking/ML yet. Built green in CI; **on-device frame-survival result still pending.**
+- Compose UI: a minimal Start/Stop screen (no theming work beyond the scaffold).
 
 ## Key decisions
 
@@ -30,13 +34,17 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 
 ## In progress / next
 
-- **Next: prompt `002_camera_fgs_poc.md`** — the risk-first proof-of-feasibility
-  (camera foreground service + CameraX front-camera frame logger). Its acceptance
-  criterion (frames survive screen-off/app-switch for 30–60 min on real Pixel + Samsung
-  devices) requires on-device testing by a human — CI only proves it builds.
+- **Awaiting the human on-device check** for 002/002b: install the APK, Start, switch
+  away / lock the screen for ~1–2 min, return, and read whether the on-screen frame count
+  kept rising (and "since last frame" is small). One phone is enough for a first pass;
+  the longer multi-OEM run (Samsung/Xiaomi, 30–60 min) is the follow-up. Record the
+  result here. This gates prompt 003.
 - Remaining stages 003–010 are proposed in the research report §19; each will be drafted
   as a prompt when run.
 
 ## Prompts run
 
 - `001_setup.md` — initial scaffold confirmed.
+- `002_camera_fgs_poc.md` — camera-FGS frame-logger probe (CI green, `00539b8`).
+- `002b_onscreen_frame_counter.md` — on-screen/notification frame counter for an
+  adb-free survival test.

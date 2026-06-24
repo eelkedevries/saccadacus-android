@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -21,6 +22,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.saccadacusandroid.ui.theme.AppTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,7 +53,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ControlScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var running by remember { mutableStateOf(false) }
+    val snapshot by TrackingStats.state.collectAsState()
+
+    // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
+    var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowNanos = SystemClock.elapsedRealtimeNanos()
+            delay(500)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -59,9 +72,21 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             PackageManager.PERMISSION_GRANTED
         if (cameraGranted) {
             startTrackingService(context)
-            running = true
         }
     }
+
+    val running = snapshot.active
+    val runningSecs = if (snapshot.startElapsedRealtimeNanos > 0L) {
+        (maxOf(nowNanos, snapshot.lastFrameElapsedRealtimeNanos) - snapshot.startElapsedRealtimeNanos) / 1_000_000_000.0
+    } else {
+        0.0
+    }
+    val sinceLastSecs = if (snapshot.lastFrameElapsedRealtimeNanos > 0L) {
+        ((nowNanos - snapshot.lastFrameElapsedRealtimeNanos) / 1_000_000_000.0).coerceAtLeast(0.0)
+    } else {
+        0.0
+    }
+    val fps = if (runningSecs > 0.5) snapshot.frameCount / runningSecs else 0.0
 
     Column(
         modifier = modifier
@@ -89,23 +114,36 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         Button(
             enabled = running,
-            onClick = {
-                stopTrackingService(context)
-                running = false
-            },
+            onClick = { stopTrackingService(context) },
         ) {
             Text("Stop")
         }
+
         Spacer(Modifier.height(24.dp))
-        Text(
-            if (running) {
-                "Running. Switch to another app — frames keep logging. Stop here or from the notification."
-            } else {
-                "Idle. Press Start (grant camera) to begin a background camera session."
-            },
-        )
+        Text("Frames logged: ${snapshot.frameCount}")
+        Text("Running: ${formatDuration(runningSecs)}")
+        Text("Since last frame: ${formatSeconds(sinceLastSecs)} s")
+        Text("Approx rate: ${fps.toInt()} fps")
+        Spacer(Modifier.height(16.dp))
+        Text(verdict(running, sinceLastSecs))
     }
 }
+
+private fun verdict(running: Boolean, sinceLastSecs: Double): String = when {
+    !running ->
+        "Idle. Press Start and grant the camera, then switch to another app or lock the screen for a minute."
+    sinceLastSecs < 3.0 ->
+        "Frames are arriving. Switch away or lock the screen, then come back: if this count kept rising, the background camera works."
+    else ->
+        "No frame for ${sinceLastSecs.toInt()} s — the camera was likely blocked or the service was killed."
+}
+
+private fun formatDuration(seconds: Double): String {
+    val total = seconds.toInt()
+    return "%d:%02d".format(total / 60, total % 60)
+}
+
+private fun formatSeconds(seconds: Double): String = "%.1f".format(seconds)
 
 private fun startTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)

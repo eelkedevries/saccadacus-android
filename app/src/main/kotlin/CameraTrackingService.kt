@@ -19,12 +19,13 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Proof-of-feasibility foreground service (prompt 002).
+ * Proof-of-feasibility foreground service (prompts 002 / 002b).
  *
  * Owns the front camera via CameraX [ImageAnalysis] and, for each analysed frame,
  * appends `frameIndex, cameraSensorTimestamp, elapsedRealtimeNanos` to a CSV file in
- * the app's external files dir. No tracking, no ML — this exists only to test whether
- * the OS keeps delivering front-camera frames after the user leaves the app.
+ * the app's external files dir, and updates [TrackingStats] + the notification so
+ * progress is visible without pulling the CSV. No tracking, no ML — this exists only
+ * to test whether the OS keeps delivering front-camera frames after the user leaves.
  */
 class CameraTrackingService : LifecycleService() {
 
@@ -32,6 +33,7 @@ class CameraTrackingService : LifecycleService() {
     private var cameraProvider: ProcessCameraProvider? = null
     private var logWriter: BufferedWriter? = null
     private var frameIndex = 0L
+    private var lastNotifUpdateMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -51,6 +53,7 @@ class CameraTrackingService : LifecycleService() {
     private fun startTracking() {
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+        TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
         openLog()
         bindCamera()
     }
@@ -69,7 +72,11 @@ class CameraTrackingService : LifecycleService() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             analysis.setAnalyzer(analysisExecutor) { image ->
-                logFrame(frameIndex++, image.imageInfo.timestamp, SystemClock.elapsedRealtimeNanos())
+                val elapsed = SystemClock.elapsedRealtimeNanos()
+                val index = frameIndex++
+                logFrame(index, image.imageInfo.timestamp, elapsed)
+                TrackingStats.onFrame(elapsed)
+                maybeUpdateNotification(index + 1)
                 image.close()
             }
             try {
@@ -107,6 +114,19 @@ class CameraTrackingService : LifecycleService() {
         }
     }
 
+    /** Refresh the notification with the running frame count, at most ~once every 2 s. */
+    private fun maybeUpdateNotification(frameCount: Long) {
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - lastNotifUpdateMs < NOTIF_UPDATE_INTERVAL_MS) return
+        lastNotifUpdateMs = nowMs
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount. Keep running; tap Stop to end."))
+        } catch (t: Throwable) {
+            Log.e(TAG, "notification update failed", t)
+        }
+    }
+
     private fun stopTracking() {
         closeResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -133,6 +153,7 @@ class CameraTrackingService : LifecycleService() {
             Log.e(TAG, "close log failed", t)
         }
         logWriter = null
+        TrackingStats.onStop()
     }
 
     private fun createChannel() {
@@ -146,12 +167,13 @@ class CameraTrackingService : LifecycleService() {
         )
     }
 
-    private fun buildNotification() =
+    private fun buildNotification(text: String = "Recording camera frame timing. Tap Stop to end.") =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Saccadacus tracking active")
-            .setContentText("Recording camera frame timing. Tap Stop to end.")
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .addAction(
                 0,
                 "Stop",
@@ -169,6 +191,7 @@ class CameraTrackingService : LifecycleService() {
         const val ACTION_STOP = "com.example.saccadacusandroid.action.STOP"
         private const val CHANNEL_ID = "saccadacus_tracking"
         private const val NOTIF_ID = 1
+        private const val NOTIF_UPDATE_INTERVAL_MS = 2000L
         private const val TAG = "SaccadacusFGS"
     }
 }
