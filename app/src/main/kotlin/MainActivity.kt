@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -61,6 +63,8 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val events by EventStats.state.collectAsState()
     val session by SessionStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
+    var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
+    var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -98,8 +102,8 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Saccadacus — camera feasibility probe")
@@ -116,6 +120,24 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             }
         }
         Text("Profile: ${selectedProfile.name}")
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SessionConfig.useCaseModes.forEach { mode ->
+                Button(
+                    enabled = !running && useCase != mode,
+                    onClick = { useCase = mode; SessionConfig.useCaseMode = mode },
+                ) { Text(mode) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SessionConfig.eyeModes.forEach { mode ->
+                Button(
+                    enabled = !running && eyeMode != mode,
+                    onClick = { eyeMode = mode; SessionConfig.eyeMode = mode },
+                ) { Text(mode) }
+            }
+        }
+        Text("Mode: $useCase · eyes $eyeMode")
         Spacer(Modifier.height(16.dp))
         Button(
             enabled = !running,
@@ -164,6 +186,15 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         }
         Text("Saccades ${events.saccades} · Blinks ${events.blinks} · ${events.headMotionLabel}")
         Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · sensors ${if (session.sensorsActive) "on" else "off"}")
+        Spacer(Modifier.height(12.dp))
+        Text(
+            if (running) {
+                if (snapshot.faceDetected) "Tracking quality: OK" else "Tracking quality: FACE LOST"
+            } else {
+                "Tracking quality: idle"
+            },
+        )
+        Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }

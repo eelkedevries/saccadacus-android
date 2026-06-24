@@ -81,7 +81,7 @@ class CameraTrackingService : LifecycleService() {
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
         getExternalFilesDir(null)?.let { dir ->
-            csvWriter = CsvSessionWriter(dir).apply { start("iris", "binocular", System.currentTimeMillis()) }
+            csvWriter = CsvSessionWriter(dir).apply { start("iris", SessionConfig.eyeMode, System.currentTimeMillis()) }
         }
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
@@ -268,6 +268,25 @@ class CameraTrackingService : LifecycleService() {
         csvWriter = null
         Log.i(TAG, "Session CSV: ${file?.absolutePath}")
         writeSensorSidecar()
+        writeMetaSidecar()
+    }
+
+    private fun writeMetaSidecar() {
+        try {
+            val file = File(getExternalFilesDir(null), "meta_${System.currentTimeMillis()}.csv")
+            file.bufferedWriter().use { w ->
+                w.write("key,value"); w.newLine()
+                w.write("profile,${SessionRecorder.profileName}"); w.newLine()
+                w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
+                w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
+                w.write("start_wallclock_ms,${SessionRecorder.startWallClockMs}"); w.newLine()
+                w.write("start_elapsed_nanos,${SessionRecorder.startElapsedNanos}"); w.newLine()
+                w.write("stop_wallclock_ms,${System.currentTimeMillis()}"); w.newLine()
+                w.write("sample_count,${SessionRecorder.samples.size}"); w.newLine()
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "meta sidecar failed", t)
+        }
     }
 
     private fun writeSensorSidecar() {
