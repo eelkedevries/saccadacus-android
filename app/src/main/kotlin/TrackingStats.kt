@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 data class TrackingSnapshot(
     val active: Boolean = false,
     val paused: Boolean = false,
+    val cameraLost: Boolean = false,
     val frameCount: Long = 0L,
     val startElapsedRealtimeNanos: Long = 0L,
     val lastFrameElapsedRealtimeNanos: Long = 0L,
@@ -52,6 +53,12 @@ object TrackingStats {
         )
     }
 
+    fun onCameraLost(lost: Boolean) {
+        if (_state.value.cameraLost != lost) {
+            _state.value = _state.value.copy(cameraLost = lost)
+        }
+    }
+
     fun onPause() {
         _state.value = _state.value.copy(paused = true)
     }
@@ -61,6 +68,6 @@ object TrackingStats {
     }
 
     fun onStop() {
-        _state.value = _state.value.copy(active = false, paused = false, faceDetected = false)
+        _state.value = _state.value.copy(active = false, paused = false, cameraLost = false, faceDetected = false)
     }
 }

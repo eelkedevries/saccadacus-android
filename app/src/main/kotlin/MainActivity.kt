@@ -1,14 +1,18 @@
 package com.example.saccadacusandroid
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -73,9 +77,12 @@ fun ControlScreen(modifier: Modifier = Modifier) {
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
+    val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as PowerManager }
+    var batteryExempt by remember { mutableStateOf(powerManager.isIgnoringBatteryOptimizations(context.packageName)) }
     LaunchedEffect(Unit) {
         while (true) {
             nowNanos = SystemClock.elapsedRealtimeNanos()
+            batteryExempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
             delay(500)
         }
     }
@@ -93,6 +100,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
 
     val running = snapshot.active
     val paused = snapshot.paused
+    val cameraLost = snapshot.cameraLost
     val runningSecs = if (snapshot.startElapsedRealtimeNanos > 0L) {
         (maxOf(nowNanos, snapshot.lastFrameElapsedRealtimeNanos) - snapshot.startElapsedRealtimeNanos) / 1_000_000_000.0
     } else {
@@ -152,6 +160,11 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         if (rawVideo) {
             Text("Raw video will be saved locally this session — you consent.")
         }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            enabled = !batteryExempt,
+            onClick = { requestIgnoreBatteryOptimizations(context) },
+        ) { Text(if (batteryExempt) "Battery: unrestricted ✓" else "Allow background (battery)") }
         Spacer(Modifier.height(16.dp))
         Button(
             enabled = !running,
@@ -225,6 +238,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         Text(
             when {
+                running && cameraLost -> "Tracking quality: CAMERA LOST — retrying"
                 running && paused -> "Tracking quality: PAUSED"
                 running && snapshot.faceDetected -> "Tracking quality: OK"
                 running -> "Tracking quality: FACE LOST"
@@ -289,6 +303,26 @@ private fun markTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)
         .setAction(CameraTrackingService.ACTION_MARK)
     context.startService(intent)
+}
+
+/** Open the system battery-optimisation request dialog for this app (013). User-driven, never silent. */
+@SuppressLint("BatteryLife")
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        .setData(Uri.parse("package:${context.packageName}"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(request)
+    } catch (t: Throwable) {
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (t2: Throwable) {
+            Toast.makeText(context, "Battery settings unavailable on this device.", Toast.LENGTH_LONG).show()
+        }
+    }
 }
 
 private fun latestSessionCsv(context: Context): File? {

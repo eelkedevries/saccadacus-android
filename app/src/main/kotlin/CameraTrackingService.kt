@@ -29,6 +29,8 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 /**
  * Foreground service that owns the front camera (002 / 002b), the MediaPipe Face
@@ -67,6 +69,12 @@ class CameraTrackingService : LifecycleService() {
     // Interaction markers (012)
     @Volatile private var markerCount = 0
 
+    // Long-run survival (013): a watchdog detects a frame stall (e.g. camera eviction by
+    // another app), logs a tracking-loss interval, and attempts to re-acquire the camera.
+    private var watchdog: ScheduledExecutorService? = null
+    private var cameraLoss: SessionRecorder.LossInterval? = null
+    @Volatile private var lastReacquireMs = 0L
+
     // Export (008)
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
@@ -96,6 +104,8 @@ class CameraTrackingService : LifecycleService() {
     private fun startTracking() {
         paused = false
         markerCount = 0
+        cameraLoss = null
+        lastReacquireMs = 0L
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -117,6 +127,7 @@ class CameraTrackingService : LifecycleService() {
             )
         }
         bindCamera()
+        startWatchdog()
     }
 
     private fun bindCamera() {
@@ -192,6 +203,7 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun startVideoRecording(capture: VideoCapture<Recorder>) {
+        if (recording != null) return // re-acquire (013) must not spawn a second recording
         try {
             val dir = getExternalFilesDir(null) ?: return
             val file = File(dir, "video_${System.currentTimeMillis()}.mp4")
@@ -438,10 +450,69 @@ class CameraTrackingService : LifecycleService() {
     private fun refreshNotification() {
         try {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val text = if (paused) "Paused. Tap Resume to continue." else "Recording. Tap Stop to end."
+            val text = when {
+                paused -> "Paused. Tap Resume to continue."
+                TrackingStats.state.value.cameraLost -> "Camera lost — retrying…"
+                else -> "Recording. Tap Stop to end."
+            }
             manager.notify(NOTIF_ID, buildNotification(text))
         } catch (t: Throwable) {
             Log.e(TAG, "notification refresh failed", t)
+        }
+    }
+
+    /** Periodic check for a frame stall (camera eviction); logs the loss and re-acquires (013). */
+    private fun startWatchdog() {
+        watchdog?.shutdownNow()
+        watchdog = Executors.newSingleThreadScheduledExecutor().also { exec ->
+            exec.scheduleWithFixedDelay(
+                {
+                    try {
+                        checkFrameHealth()
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "watchdog tick failed", t)
+                    }
+                },
+                FRAME_WATCHDOG_INTERVAL_MS,
+                FRAME_WATCHDOG_INTERVAL_MS,
+                TimeUnit.MILLISECONDS,
+            )
+        }
+    }
+
+    private fun checkFrameHealth() {
+        if (paused) return
+        val last = TrackingStats.state.value.lastFrameElapsedRealtimeNanos
+        if (last <= 0L) return
+        val gapMs = (SystemClock.elapsedRealtimeNanos() - last) / 1_000_000
+        if (gapMs > FRAME_LOSS_THRESHOLD_MS) onCameraLoss(gapMs) else onCameraRecovered()
+    }
+
+    private fun onCameraLoss(gapMs: Long) {
+        val now = SystemClock.elapsedRealtimeNanos()
+        val existing = cameraLoss
+        if (existing == null) {
+            cameraLoss = SessionRecorder.LossInterval(now, now).also { SessionRecorder.lossIntervals.add(it) }
+            TrackingStats.onCameraLost(true)
+            refreshNotification()
+            Log.w(TAG, "camera frame stall (${gapMs} ms) — attempting re-acquire")
+        } else {
+            existing.endNanos = now
+        }
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - lastReacquireMs >= REACQUIRE_INTERVAL_MS) {
+            lastReacquireMs = nowMs
+            bindCamera()
+        }
+    }
+
+    private fun onCameraRecovered() {
+        if (cameraLoss != null) {
+            cameraLoss?.endNanos = SystemClock.elapsedRealtimeNanos()
+            cameraLoss = null
+            TrackingStats.onCameraLost(false)
+            refreshNotification()
+            Log.i(TAG, "camera frames recovered")
         }
     }
 
@@ -479,6 +550,9 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun closeResources() {
+        watchdog?.shutdownNow()
+        watchdog = null
+        cameraLoss = null
         try {
             recording?.stop()
         } catch (t: Throwable) {
@@ -566,6 +640,9 @@ class CameraTrackingService : LifecycleService() {
         private const val CHANNEL_ID = "saccadacus_tracking"
         private const val NOTIF_ID = 1
         private const val NOTIF_UPDATE_INTERVAL_MS = 2000L
+        private const val FRAME_WATCHDOG_INTERVAL_MS = 2000L
+        private const val FRAME_LOSS_THRESHOLD_MS = 4000L
+        private const val REACQUIRE_INTERVAL_MS = 3000L
         private const val TAG = "SaccadacusFGS"
     }
 }
