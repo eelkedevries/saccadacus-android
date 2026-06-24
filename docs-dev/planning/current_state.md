@@ -11,10 +11,16 @@ progress. Read it at session start. Records current reality; the binding canon i
   (`frame_index, camera_sensor_timestamp, elapsed_realtime_nanos`) to a CSV in the app's
   external files dir. A persistent notification (with Stop) and the activity show a live
   frame count + "since last frame" + verdict, so the survival test needs no `adb`/CSV.
-  No tracking/ML yet. Built green in CI; **on-device frame survival CONFIRMED on one
-  device (2026-06-24): frames kept arriving while the app was backgrounded / screen
-  locked.**
-- Compose UI: a minimal Start/Stop screen (no theming work beyond the scaffold).
+  Built green in CI; **on-device frame survival CONFIRMED on one device (2026-06-24):
+  frames kept arriving while the app was backgrounded / screen locked.**
+- **Full v1 tracking pipeline (prompts 003–018)** — the `camera` service owns a MediaPipe
+  Face Landmarker; per frame it derives eye-local/iris/head-pose/blink signals, detects
+  saccades/blinks, records an in-memory session + motion sensors, and writes the combined
+  CSV incrementally. Controls are Start/Pause/Resume/Mark/Stop (notification + UI). Extras:
+  on-device benchmark + quality profiles, a low-light/face-lost alert, a live face/iris
+  overlay, a sessions screen (save-to-Downloads / share / delete), session naming + notes,
+  optional consent-gated raw video, and a frame-stall watchdog that re-acquires the camera.
+- Compose UI: a scrollable control screen plus a sessions screen (no theming beyond the scaffold).
 
 ## Key decisions
 
@@ -58,12 +64,20 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   toward the eye centre in poor light), not a code bug. The `SignConvention` /
   `FaceMeshIndices` flags remain ready for one-line calibration once a good-light recording
   exists; the overlay (prompt 015) is the tool that will make that retest immediate.
-- **New prompt queue `011`–`018` is drafted** (not yet run): notification pause/resume
-  (011) and interaction markers (012) complete the defined v1 controls; long-run survival
-  (013) and SDK/AGP version pinning (014) harden it; Tier-4 extras are the live face/iris
-  overlay (015), low-light/face-lost alert (016), sessions screen (017), and session
-  naming + notes (018). **Each carries a "Cross-prompt impact check"**: while running it,
-  the agent must adjust any later, not-yet-run prompt that new findings invalidate.
+- **Prompt queue `011`–`018` is implemented and CI-green** (executed 2026-06-24, committed
+  directly to `main`): notification pause/resume (011) and interaction markers (012)
+  complete the defined v1 controls; long-run survival — battery-opt exemption + camera
+  re-acquire (013) — and SDK/AGP version verification (014) harden it; the live face/iris
+  overlay (015), low-light/face-lost alert (016), sessions screen (017), and session naming
+  + notes (018) round it out. Each prompt carried a "Cross-prompt impact check"; none
+  invalidated a later prompt. **With this, the written v1 spec (§Scope) is fully implemented.**
+- **Backlog beyond v1 (not yet drafted):** the next tier is *scientific validity* —
+  fixation detection + per-session summary stats, an on-device calibration routine, signal
+  filtering, and timestamp/latency validation — plus *robustness* (orphaned-`.tmp` session
+  recovery, orientation handling, largest-face lock, storage/thermal guards) and *polish*
+  (settings persistence via DataStore, user docs + CSV dictionary, onboarding, release
+  signing/R8, more unit tests). Calibration/filtering specifics depend on the daylight gaze
+  retest, which remains the gating next step.
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
@@ -85,3 +99,11 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `008_csv_export.md` — incremental combined CSV + sensor/meta sidecars + share (CI green).
 - `009_modes_and_quality_ui.md` — use-case/eye selectors + quality panel (CI green).
 - `010_optional_raw_video.md` — consent-gated CameraX VideoCapture (CI green).
+- `011_notification_pause_resume.md` — Pause/Resume in the service + notification (CI green).
+- `012_interaction_markers.md` — user "Mark" writes `task` rows to the CSV (CI green).
+- `013_long_run_survival.md` — battery-opt exemption + camera-eviction re-acquire (CI green).
+- `014_pin_sdk_agp_versions.md` — verified all build versions are stable GA, not preview (CI green).
+- `015_face_iris_overlay.md` — live landmark/iris overlay for visual calibration (CI green).
+- `016_low_light_quality_alert.md` — luma/face quality warning in UI + notification (CI green).
+- `017_sessions_screen.md` — in-app sessions list: per-session save/share/delete (CI green).
+- `018_session_naming_notes.md` — name + note per session, in filename + metadata (CI green).
