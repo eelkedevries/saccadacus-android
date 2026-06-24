@@ -14,4 +14,8 @@ object SessionConfig {
 
     @Volatile
     var eyeMode: String = "Binocular"
+
+    /** Optional local raw-video recording (prompt 010). Off by default; explicit opt-in. */
+    @Volatile
+    var rawVideoEnabled: Boolean = false
 }

@@ -13,6 +13,12 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
@@ -57,6 +63,11 @@ class CameraTrackingService : LifecycleService() {
     // Export (008)
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
+
+    // Raw video (010)
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var recording: Recording? = null
+    @Volatile private var videoPath: String = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -139,11 +150,44 @@ class CameraTrackingService : LifecycleService() {
             }
             try {
                 provider.unbindAll()
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+                if (SessionConfig.rawVideoEnabled) {
+                    bindWithVideo(provider, analysis)
+                } else {
+                    provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+                }
             } catch (t: Throwable) {
                 Log.e(TAG, "bindToLifecycle failed", t)
             }
         }, mainExecutor)
+    }
+
+    private fun bindWithVideo(provider: ProcessCameraProvider, analysis: ImageAnalysis) {
+        val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
+        val capture = VideoCapture.withOutput(recorder)
+        try {
+            provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis, capture)
+            videoCapture = capture
+            startVideoRecording(capture)
+        } catch (t: Throwable) {
+            Log.e(TAG, "video+analysis bind failed; falling back to analysis only", t)
+            videoCapture = null
+            provider.unbindAll()
+            provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+        }
+    }
+
+    private fun startVideoRecording(capture: VideoCapture<Recorder>) {
+        try {
+            val dir = getExternalFilesDir(null) ?: return
+            val file = File(dir, "video_${System.currentTimeMillis()}.mp4")
+            videoPath = file.absolutePath
+            recording = capture.output
+                .prepareRecording(this, FileOutputOptions.Builder(file).build())
+                .start(mainExecutor) { /* VideoRecordEvent ignored for v1 */ }
+            Log.i(TAG, "Recording raw video to ${file.absolutePath}")
+        } catch (t: Throwable) {
+            Log.e(TAG, "video record failed", t)
+        }
     }
 
     /** MediaPipe LIVE_STREAM requires strictly increasing timestamps (ms). */
@@ -279,6 +323,8 @@ class CameraTrackingService : LifecycleService() {
                 w.write("profile,${SessionRecorder.profileName}"); w.newLine()
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
+                w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
+                w.write("raw_video_path,$videoPath"); w.newLine()
                 w.write("start_wallclock_ms,${SessionRecorder.startWallClockMs}"); w.newLine()
                 w.write("start_elapsed_nanos,${SessionRecorder.startElapsedNanos}"); w.newLine()
                 w.write("stop_wallclock_ms,${System.currentTimeMillis()}"); w.newLine()
@@ -340,7 +386,8 @@ class CameraTrackingService : LifecycleService() {
         lastNotifUpdateMs = nowMs
         try {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount. Keep running; tap Stop to end."))
+            val videoSuffix = if (recording != null) " · ● REC video" else ""
+            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount$videoSuffix. Tap Stop to end."))
         } catch (t: Throwable) {
             Log.e(TAG, "notification update failed", t)
         }
@@ -361,6 +408,14 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun closeResources() {
+        try {
+            recording?.stop()
+        } catch (t: Throwable) {
+            Log.e(TAG, "video stop failed", t)
+        }
+        recording = null
+        videoCapture = null
+        videoPath = ""
         try {
             cameraProvider?.unbindAll()
         } catch (t: Throwable) {

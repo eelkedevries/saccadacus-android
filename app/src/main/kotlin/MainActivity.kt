@@ -65,6 +65,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
+    var rawVideo by remember { mutableStateOf(SessionConfig.rawVideoEnabled) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -138,6 +139,14 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             }
         }
         Text("Mode: $useCase · eyes $eyeMode")
+        Spacer(Modifier.height(8.dp))
+        Button(
+            enabled = !running,
+            onClick = { rawVideo = !rawVideo; SessionConfig.rawVideoEnabled = rawVideo },
+        ) { Text(if (rawVideo) "Raw video: ON" else "Raw video: OFF (tap to enable)") }
+        if (rawVideo) {
+            Text("Raw video will be saved locally this session — you consent.")
+        }
         Spacer(Modifier.height(16.dp))
         Button(
             enabled = !running,
@@ -195,6 +204,9 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             },
         )
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
+        if (running && rawVideo) {
+            Text("● Recording raw video")
+        }
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }
