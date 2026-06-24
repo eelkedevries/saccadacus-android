@@ -1,5 +1,13 @@
 # Kotlin tracks the Android Gradle Plugin's built-in Kotlin: AGP 9.2.0 bundles
 # Kotlin Gradle plugin 2.3.10, and the Compose compiler plugin must match it.
+#
+# Version verification (prompt 014, 2026-06-24): every compile-affecting version below is a
+# stable GA release, not a preview, so no pins were changed. Evidence: compileSdk 37 and
+# targetSdk 36 are numeric (AGP only accepts a number for a *finalised* API level — previews
+# require compileSdkPreview="<codename>"); all artifact versions are suffix-less (previews
+# carry -alpha/-beta/-rc); Kotlin 2.3.10 GA was confirmed on Maven Central (its -RC/-RC2 are
+# superseded pre-releases); and all versions resolve and build green in CI. Re-verify here
+# whenever these are next bumped.
 [versions]
 agp = "9.2.0"
 kotlin = "2.3.10"
