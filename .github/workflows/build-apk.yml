@@ -19,6 +19,8 @@ on:
 jobs:
   build-and-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +41,20 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # On pushes to main, also publish the APK to a rolling "latest" GitHub Release
+      # so it can be installed with one tap from the Releases page (no zip/adb).
+      - name: Publish APK to the rolling "latest" release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest debug APK
+          make_latest: true
+          body: >-
+            One-tap debug build for sideloading. Download **app-debug.apk** below and
+            install it on your phone. Debug-signed; not for distribution.
+          files: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Validate prompt numbering
         run: bash scripts/validate-prompts.sh
