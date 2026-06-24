@@ -76,6 +76,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val events by EventStats.state.collectAsState()
     val session by SessionStats.state.collectAsState()
     val overlay by OverlayStats.state.collectAsState()
+    val quality by QualityStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
@@ -257,6 +258,16 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             },
         )
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
+        if (running) {
+            Text(
+                when (quality.label) {
+                    QualitySnapshot.LOW_LIGHT -> "Lighting: LOW — tracking may be unreliable (luma ${quality.luma.toInt()})"
+                    QualitySnapshot.FACE_LOST -> "Lighting: no face in view"
+                    QualitySnapshot.GOOD -> "Lighting: good (luma ${quality.luma.toInt()})"
+                    else -> "Lighting: —"
+                },
+            )
+        }
         if (running && rawVideo) {
             Text("● Recording raw video")
         }

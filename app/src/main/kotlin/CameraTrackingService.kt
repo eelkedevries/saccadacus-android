@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.CameraSelector
@@ -79,6 +80,9 @@ class CameraTrackingService : LifecycleService() {
     // Debug overlay (015): throttled publish of landmark points, only when enabled.
     private var lastOverlayMs = 0L
 
+    // Quality alert (016): smoothed mean luma of the analysis frame for a low-light warning.
+    @Volatile private var lumaEma = 0.0
+
     // Export (008)
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
@@ -111,6 +115,7 @@ class CameraTrackingService : LifecycleService() {
         cameraLoss = null
         lastReacquireMs = 0L
         lastOverlayMs = 0L
+        lumaEma = 0.0
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -172,7 +177,9 @@ class CameraTrackingService : LifecycleService() {
                         val ts = nextMpTimestamp()
                         submitTimesNanos[ts] = SystemClock.elapsedRealtimeNanos()
                         analysedFrames++
-                        faceHelper?.detectAsync(image.toBitmap(), image.imageInfo.rotationDegrees, ts)
+                        val bitmap = image.toBitmap()
+                        sampleLuma(bitmap)
+                        faceHelper?.detectAsync(bitmap, image.imageInfo.rotationDegrees, ts)
                     } catch (t: Throwable) {
                         Log.e(TAG, "face detect failed", t)
                     }
@@ -252,6 +259,7 @@ class CameraTrackingService : LifecycleService() {
         }
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
         maybePublishOverlay(faces, detected)
+        publishQuality(detected)
         val frame = FaceSignalAdapter.toResult(result)
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
@@ -289,6 +297,41 @@ class CameraTrackingService : LifecycleService() {
         OverlayStats.update(
             OverlayFrame(arr, FaceMeshIndices.IMG_LEFT_IRIS_CENTRE, FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE),
         )
+    }
+
+    /** Derive the advisory quality label from face detection + smoothed luma (016). */
+    private fun publishQuality(detected: Boolean) {
+        val label = when {
+            !detected -> QualitySnapshot.FACE_LOST
+            lumaEma > 0.0 && lumaEma < LOW_LIGHT_LUMA -> QualitySnapshot.LOW_LIGHT
+            else -> QualitySnapshot.GOOD
+        }
+        QualityStats.update(label, lumaEma)
+    }
+
+    private fun sampleLuma(bitmap: Bitmap) {
+        val luma = meanLuma(bitmap)
+        lumaEma = if (lumaEma <= 0.0) luma else LUMA_EMA_ALPHA * luma + (1.0 - LUMA_EMA_ALPHA) * lumaEma
+    }
+
+    /** Mean luma (0–255) over a coarse 16×16 grid of the analysis frame. */
+    private fun meanLuma(bitmap: Bitmap): Double {
+        val stepX = (bitmap.width / 16).coerceAtLeast(1)
+        val stepY = (bitmap.height / 16).coerceAtLeast(1)
+        var sum = 0.0
+        var n = 0
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val p = bitmap.getPixel(x, y)
+                sum += 0.299 * ((p shr 16) and 0xFF) + 0.587 * ((p shr 8) and 0xFF) + 0.114 * (p and 0xFF)
+                n++
+                x += stepX
+            }
+            y += stepY
+        }
+        return if (n > 0) sum / n else 0.0
     }
 
     private fun publishBenchmark() {
@@ -442,7 +485,12 @@ class CameraTrackingService : LifecycleService() {
         try {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val videoSuffix = if (recording != null) " · ● REC video" else ""
-            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount$videoSuffix. Tap Stop to end."))
+            val qualitySuffix = when (QualityStats.state.value.label) {
+                QualitySnapshot.LOW_LIGHT -> " · ⚠ Low light"
+                QualitySnapshot.FACE_LOST -> " · ⚠ No face"
+                else -> ""
+            }
+            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount$videoSuffix$qualitySuffix. Tap Stop to end."))
         } catch (t: Throwable) {
             Log.e(TAG, "notification update failed", t)
         }
@@ -606,6 +654,7 @@ class CameraTrackingService : LifecycleService() {
         TrackingStats.onStop()
         SignalStats.clear()
         OverlayStats.clear()
+        QualityStats.clear()
         eventAccumulator.reset()
         motionSensors?.stop()
         motionSensors = null
@@ -672,6 +721,8 @@ class CameraTrackingService : LifecycleService() {
         private const val FRAME_LOSS_THRESHOLD_MS = 4000L
         private const val REACQUIRE_INTERVAL_MS = 3000L
         private const val OVERLAY_INTERVAL_MS = 100L
+        private const val LOW_LIGHT_LUMA = 60.0
+        private const val LUMA_EMA_ALPHA = 0.2
         private const val TAG = "SaccadacusFGS"
     }
 }
