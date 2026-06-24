@@ -44,7 +44,8 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - **Prompt queue `003`–`010` is drafted** in `docs-dev/agent/prompts/`: engine (003) →
   on-device benchmark (004) → eye/iris/head-pose adapter (005) → signals/events + parity
   tests (006) → session + sensors (007) → CSV export (008) → modes + quality UI (009) →
-  optional raw video (010). **Next: run `003`** (integrate MediaPipe Face Landmarker).
+  optional raw video (010). **003 + 004 done (CI green); next: run `005`** (eye/iris/
+  head-pose adapter — the parity-critical one that needs an on-device sign check).
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
@@ -54,3 +55,7 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `002_camera_fgs_poc.md` — camera-FGS frame-logger probe (CI green, `00539b8`).
 - `002b_onscreen_frame_counter.md` — on-screen/notification frame counter for an
   adb-free survival test.
+- `003_mediapipe_face_landmarker.md` — MediaPipe Face Landmarker integrated (CI green,
+  on-device behaviour pending).
+- `004_backend_benchmark.md` — on-device inference benchmark + quality/balanced/battery
+  profiles (CI green).

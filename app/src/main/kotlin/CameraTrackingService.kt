@@ -10,20 +10,25 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import java.io.BufferedWriter
 import java.io.File
+import java.util.Collections
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Foreground service that owns the front camera (prompts 002 / 002b) and the MediaPipe
- * Face Landmarker (prompt 003). Per frame it logs frame timing to CSV and feeds the
- * frame to MediaPipe; face landmarks / blink blendshapes are surfaced via [TrackingStats].
- * No derived eye/iris/head signals yet — that is prompt 005.
+ * Foreground service that owns the front camera (002 / 002b), the MediaPipe Face
+ * Landmarker (003), and the on-device benchmark (004). Per frame it logs frame timing,
+ * (per the active profile cadence) feeds MediaPipe, and times inference; face/landmark
+ * info is published via [TrackingStats] and benchmark stats via [BenchmarkStats].
  */
 class CameraTrackingService : LifecycleService() {
 
@@ -34,6 +39,14 @@ class CameraTrackingService : LifecycleService() {
     private var frameIndex = 0L
     private var lastNotifUpdateMs = 0L
     private var lastMpTimestamp = 0L
+
+    // Benchmark (004)
+    private lateinit var profile: TrackingProfile
+    private val submitTimesNanos = ConcurrentHashMap<Long, Long>()
+    private val latenciesMs = Collections.synchronizedList(ArrayList<Double>())
+    private var analysedFrames = 0L
+    private var resultFrames = 0L
+    private var benchStartNanos = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -51,11 +64,13 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun startTracking() {
+        profile = ProbeConfig.selected
+        benchStartNanos = SystemClock.elapsedRealtimeNanos()
+        BenchmarkStats.reset(profile.name)
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
         openLog()
-        // Model load is slow; build the landmarker off the main thread.
         analysisExecutor.execute {
             faceHelper = FaceLandmarkerHelper(
                 this,
@@ -79,6 +94,13 @@ class CameraTrackingService : LifecycleService() {
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setResolutionSelector(
+                    ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(profile.resolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER),
+                        )
+                        .build(),
+                )
                 .build()
             analysis.setAnalyzer(analysisExecutor) { image ->
                 val elapsed = SystemClock.elapsedRealtimeNanos()
@@ -86,10 +108,15 @@ class CameraTrackingService : LifecycleService() {
                 logFrame(index, image.imageInfo.timestamp, elapsed)
                 TrackingStats.onFrame(elapsed)
                 maybeUpdateNotification(index + 1)
-                try {
-                    faceHelper?.detectAsync(image.toBitmap(), image.imageInfo.rotationDegrees, nextMpTimestamp())
-                } catch (t: Throwable) {
-                    Log.e(TAG, "face detect failed", t)
+                if (index % profile.inferenceCadence == 0L) {
+                    try {
+                        val ts = nextMpTimestamp()
+                        submitTimesNanos[ts] = SystemClock.elapsedRealtimeNanos()
+                        analysedFrames++
+                        faceHelper?.detectAsync(image.toBitmap(), image.imageInfo.rotationDegrees, ts)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "face detect failed", t)
+                    }
                 }
                 image.close()
             }
@@ -110,6 +137,12 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun handleFaceResult(result: FaceLandmarkerResult) {
+        val submitNanos = submitTimesNanos.remove(result.timestampMs())
+        if (submitNanos != null) {
+            latenciesMs.add((SystemClock.elapsedRealtimeNanos() - submitNanos) / 1_000_000.0)
+            resultFrames++
+            if (resultFrames % 15L == 0L) publishBenchmark()
+        }
         val faces = result.faceLandmarks()
         val detected = faces.isNotEmpty()
         val landmarkCount = if (detected) faces[0].size else 0
@@ -126,6 +159,64 @@ class CameraTrackingService : LifecycleService() {
         }
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
     }
+
+    private fun publishBenchmark() {
+        val elapsedSec = (SystemClock.elapsedRealtimeNanos() - benchStartNanos) / 1_000_000_000.0
+        val snapshot = synchronized(latenciesMs) {
+            val sorted = latenciesMs.sorted()
+            val n = sorted.size
+            if (n == 0) return
+            BenchmarkSnapshot(
+                profileName = profile.name,
+                analysedFrames = analysedFrames,
+                droppedFrames = (analysedFrames - resultFrames).coerceAtLeast(0L),
+                analysedFps = if (elapsedSec > 0.5) resultFrames / elapsedSec else 0.0,
+                latencyMeanMs = sorted.sum() / n,
+                latencyP50Ms = sorted[(n * 50 / 100).coerceIn(0, n - 1)],
+                latencyP95Ms = sorted[(n * 95 / 100).coerceIn(0, n - 1)],
+            )
+        }
+        BenchmarkStats.update(snapshot)
+    }
+
+    private fun writeBenchmarkCsv() {
+        if (analysedFrames == 0L) return
+        try {
+            publishBenchmark()
+            val snap = BenchmarkStats.state.value
+            val file = File(getExternalFilesDir(null), "benchmark_${System.currentTimeMillis()}.csv")
+            file.bufferedWriter().use { w ->
+                w.write("profile,analysed_frames,dropped_frames,analysed_fps,latency_mean_ms,latency_p50_ms,latency_p95_ms")
+                w.newLine()
+                w.write(
+                    listOf(
+                        snap.profileName,
+                        snap.analysedFrames.toString(),
+                        snap.droppedFrames.toString(),
+                        fmt(snap.analysedFps),
+                        fmt(snap.latencyMeanMs),
+                        fmt(snap.latencyP50Ms),
+                        fmt(snap.latencyP95Ms),
+                    ).joinToString(","),
+                )
+                w.newLine()
+                w.newLine()
+                w.write("latency_ms")
+                w.newLine()
+                synchronized(latenciesMs) {
+                    for (latency in latenciesMs) {
+                        w.write(fmt(latency))
+                        w.newLine()
+                    }
+                }
+            }
+            Log.i(TAG, "Benchmark written: ${file.absolutePath}")
+        } catch (t: Throwable) {
+            Log.e(TAG, "benchmark write failed", t)
+        }
+    }
+
+    private fun fmt(value: Double): String = String.format(Locale.ROOT, "%.3f", value)
 
     private fun openLog() {
         try {
@@ -167,6 +258,7 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun stopTracking() {
+        writeBenchmarkCsv()
         closeResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

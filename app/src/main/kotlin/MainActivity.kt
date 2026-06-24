@@ -14,6 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,8 @@ class MainActivity : ComponentActivity() {
 fun ControlScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
+    val benchmark by BenchmarkStats.state.collectAsState()
+    var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -96,7 +99,20 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Saccadacus — camera feasibility probe")
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProbeConfig.profiles.forEach { profileOption ->
+                Button(
+                    enabled = !running && selectedProfile != profileOption,
+                    onClick = {
+                        selectedProfile = profileOption
+                        ProbeConfig.selected = profileOption
+                    },
+                ) { Text(profileOption.name) }
+            }
+        }
+        Text("Profile: ${selectedProfile.name}")
+        Spacer(Modifier.height(16.dp))
         Button(
             enabled = !running,
             onClick = {
@@ -126,6 +142,9 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Text("Approx rate: ${fps.toInt()} fps")
         Text("Face: " + if (snapshot.faceDetected) "detected (${snapshot.landmarkCount} landmarks)" else "not detected")
         Text("Blink L/R: ${"%.2f".format(snapshot.blinkLeft)} / ${"%.2f".format(snapshot.blinkRight)}")
+        Spacer(Modifier.height(12.dp))
+        Text("Benchmark — analysed ${benchmark.analysedFps.toInt()} fps, dropped ${benchmark.droppedFrames}")
+        Text("Inference ms: mean ${benchmark.latencyMeanMs.toInt()}, p50 ${benchmark.latencyP50Ms.toInt()}, p95 ${benchmark.latencyP95Ms.toInt()}")
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }
