@@ -31,9 +31,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,6 +53,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.saccadacusandroid.ui.theme.AppTheme
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +74,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ControlScreen(modifier: Modifier = Modifier) {
+    var showSessions by remember { mutableStateOf(false) }
+    if (showSessions) {
+        SessionsScreen(modifier = modifier, onBack = { showSessions = false })
+        return
+    }
     val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
     val benchmark by BenchmarkStats.state.collectAsState()
@@ -228,6 +238,12 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         ) {
             Text("Share session CSV")
         }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { showSessions = true },
+        ) {
+            Text("Sessions")
+        }
 
         Spacer(Modifier.height(24.dp))
         Text("Frames logged: ${snapshot.frameCount}")
@@ -302,6 +318,58 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
+    }
+}
+
+@Composable
+fun SessionsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var sessions by remember { mutableStateOf(listSessionCsvs(context)) }
+    var pendingDelete by remember { mutableStateOf<File?>(null) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+    ) {
+        Button(onClick = onBack) { Text("← Back") }
+        Spacer(Modifier.height(12.dp))
+        Text("Saved sessions (${sessions.size})")
+        if (sessions.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("No saved sessions yet. Record and stop a session first.")
+        }
+        sessions.forEach { file ->
+            Spacer(Modifier.height(12.dp))
+            Text(file.name)
+            Text("${file.length() / 1024} kB · ${formatStamp(file.lastModified())}")
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { saveFileToDownloads(context, file) }) { Text("Save") }
+                Button(onClick = { shareFile(context, file) }) { Text("Share") }
+                Button(onClick = { pendingDelete = file }) { Text("Delete") }
+            }
+        }
+    }
+
+    val toDelete = pendingDelete
+    if (toDelete != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete session?") },
+            text = { Text("Delete ${toDelete.name}? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    toDelete.delete()
+                    sessions = listSessionCsvs(context)
+                    pendingDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -383,8 +451,24 @@ private fun latestSessionCsv(context: Context): File? {
         ?.maxByOrNull { it.lastModified() }
 }
 
+/** Finalised session CSVs, newest first. The active session writes a `.tmp`, so it is excluded. */
+private fun listSessionCsvs(context: Context): List<File> {
+    val dir = context.getExternalFilesDir(null) ?: return emptyList()
+    return dir.listFiles()
+        ?.filter { it.name.startsWith("session_") && it.name.endsWith(".csv") }
+        ?.sortedByDescending { it.lastModified() }
+        ?: emptyList()
+}
+
+private fun formatStamp(epochMs: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.UK).format(Date(epochMs))
+
 private fun shareLatestSession(context: Context) {
     val csv = latestSessionCsv(context) ?: return
+    shareFile(context, csv)
+}
+
+private fun shareFile(context: Context, csv: File) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", csv)
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
@@ -406,6 +490,10 @@ private fun saveLatestSessionToDownloads(context: Context) {
         Toast.makeText(context, "No session CSV yet — record and stop a session first.", Toast.LENGTH_LONG).show()
         return
     }
+    saveFileToDownloads(context, csv)
+}
+
+private fun saveFileToDownloads(context: Context, csv: File) {
     val resolver = context.contentResolver
     val pending = ContentValues().apply {
         put(MediaStore.Downloads.DISPLAY_NAME, csv.name)
