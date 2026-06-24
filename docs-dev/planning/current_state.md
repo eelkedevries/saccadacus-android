@@ -11,7 +11,9 @@ progress. Read it at session start. Records current reality; the binding canon i
   (`frame_index, camera_sensor_timestamp, elapsed_realtime_nanos`) to a CSV in the app's
   external files dir. A persistent notification (with Stop) and the activity show a live
   frame count + "since last frame" + verdict, so the survival test needs no `adb`/CSV.
-  No tracking/ML yet. Built green in CI; **on-device frame-survival result still pending.**
+  No tracking/ML yet. Built green in CI; **on-device frame survival CONFIRMED on one
+  device (2026-06-24): frames kept arriving while the app was backgrounded / screen
+  locked.**
 - Compose UI: a minimal Start/Stop screen (no theming work beyond the scaffold).
 
 ## Key decisions
@@ -34,13 +36,14 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 
 ## In progress / next
 
-- **Awaiting the human on-device check** for 002/002b: install the APK, Start, switch
-  away / lock the screen for ~1–2 min, return, and read whether the on-screen frame count
-  kept rising (and "since last frame" is small). One phone is enough for a first pass;
-  the longer multi-OEM run (Samsung/Xiaomi, 30–60 min) is the follow-up. Record the
-  result here. This gates prompt 003.
+- **Feasibility confirmed (1 device, 2026-06-24)** — background front-camera frames
+  persist; the core approach is viable. Optional later: a 30–60 min run on a
+  Samsung/Xiaomi to check aggressive battery-killers. **Prompt 003 is unblocked.**
+- Debug APKs are published to the GitHub **Releases → latest** page on every push to
+  `main` (one-tap sideload), in addition to the per-run Actions artifact.
 - Remaining stages 003–010 are proposed in the research report §19; each will be drafted
-  as a prompt when run.
+  as a prompt when run. **Next up: 003** (MediaPipe Face Landmarker adapter, or the
+  permissions/quality scaffolding — to be drafted).
 
 ## Prompts run
 
