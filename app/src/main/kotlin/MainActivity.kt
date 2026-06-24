@@ -92,6 +92,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     }
 
     val running = snapshot.active
+    val paused = snapshot.paused
     val runningSecs = if (snapshot.startElapsedRealtimeNanos > 0L) {
         (maxOf(nowNanos, snapshot.lastFrameElapsedRealtimeNanos) - snapshot.startElapsedRealtimeNanos) / 1_000_000_000.0
     } else {
@@ -174,6 +175,17 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             Text("Stop")
         }
         Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                enabled = running && !paused,
+                onClick = { pauseTrackingService(context) },
+            ) { Text("Pause") }
+            Button(
+                enabled = running && paused,
+                onClick = { resumeTrackingService(context) },
+            ) { Text("Resume") }
+        }
+        Spacer(Modifier.height(12.dp))
         Button(
             enabled = !running,
             onClick = { saveLatestSessionToDownloads(context) },
@@ -208,10 +220,11 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · sensors ${if (session.sensorsActive) "on" else "off"}")
         Spacer(Modifier.height(12.dp))
         Text(
-            if (running) {
-                if (snapshot.faceDetected) "Tracking quality: OK" else "Tracking quality: FACE LOST"
-            } else {
-                "Tracking quality: idle"
+            when {
+                running && paused -> "Tracking quality: PAUSED"
+                running && snapshot.faceDetected -> "Tracking quality: OK"
+                running -> "Tracking quality: FACE LOST"
+                else -> "Tracking quality: idle"
             },
         )
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
@@ -253,6 +266,18 @@ private fun startTrackingService(context: Context) {
 private fun stopTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)
         .setAction(CameraTrackingService.ACTION_STOP)
+    context.startService(intent)
+}
+
+private fun pauseTrackingService(context: Context) {
+    val intent = Intent(context, CameraTrackingService::class.java)
+        .setAction(CameraTrackingService.ACTION_PAUSE)
+    context.startService(intent)
+}
+
+private fun resumeTrackingService(context: Context) {
+    val intent = Intent(context, CameraTrackingService::class.java)
+        .setAction(CameraTrackingService.ACTION_RESUME)
     context.startService(intent)
 }
 

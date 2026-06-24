@@ -46,6 +46,10 @@ class CameraTrackingService : LifecycleService() {
     private var lastNotifUpdateMs = 0L
     private var lastMpTimestamp = 0L
 
+    // Pause/resume (011): when paused the camera stays bound (indicator + notification
+    // persist) but frames are dropped before logging/inference/recording.
+    @Volatile private var paused = false
+
     // Benchmark (004)
     private lateinit var profile: TrackingProfile
     private val submitTimesNanos = ConcurrentHashMap<Long, Long>()
@@ -76,15 +80,17 @@ class CameraTrackingService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (intent?.action == ACTION_STOP) {
-            stopTracking()
-        } else {
-            startTracking()
+        when (intent?.action) {
+            ACTION_STOP -> stopTracking()
+            ACTION_PAUSE -> pause()
+            ACTION_RESUME -> resume()
+            else -> startTracking()
         }
         return START_NOT_STICKY
     }
 
     private fun startTracking() {
+        paused = false
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -130,6 +136,10 @@ class CameraTrackingService : LifecycleService() {
                 )
                 .build()
             analysis.setAnalyzer(analysisExecutor) { image ->
+                if (paused) {
+                    image.close()
+                    return@setAnalyzer
+                }
                 val elapsed = SystemClock.elapsedRealtimeNanos()
                 val index = frameIndex++
                 lastCameraSensorTs = image.imageInfo.timestamp
@@ -393,6 +403,42 @@ class CameraTrackingService : LifecycleService() {
         }
     }
 
+    /** Pause: keep the service + camera bound, but drop frames (no logging/inference/recording). */
+    private fun pause() {
+        if (paused) return
+        paused = true
+        try {
+            recording?.pause()
+        } catch (t: Throwable) {
+            Log.e(TAG, "video pause failed", t)
+        }
+        TrackingStats.onPause()
+        refreshNotification()
+    }
+
+    /** Resume a paused session (same session, same files). */
+    private fun resume() {
+        if (!paused) return
+        paused = false
+        try {
+            recording?.resume()
+        } catch (t: Throwable) {
+            Log.e(TAG, "video resume failed", t)
+        }
+        TrackingStats.onResume()
+        refreshNotification()
+    }
+
+    private fun refreshNotification() {
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val text = if (paused) "Paused. Tap Resume to continue." else "Recording. Tap Stop to end."
+            manager.notify(NOTIF_ID, buildNotification(text))
+        } catch (t: Throwable) {
+            Log.e(TAG, "notification refresh failed", t)
+        }
+    }
+
     private fun stopTracking() {
         writeBenchmarkCsv()
         finalizeSessionCsv()
@@ -461,26 +507,34 @@ class CameraTrackingService : LifecycleService() {
 
     private fun buildNotification(text: String = "Recording camera frame timing. Tap Stop to end.") =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Saccadacus tracking active")
+            .setContentTitle(if (paused) "Saccadacus tracking paused" else "Saccadacus tracking active")
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(
-                0,
-                "Stop",
-                PendingIntent.getService(
-                    this,
-                    0,
-                    Intent(this, CameraTrackingService::class.java).setAction(ACTION_STOP),
-                    PendingIntent.FLAG_IMMUTABLE,
-                ),
+                if (paused) {
+                    NotificationCompat.Action(0, "Resume", servicePendingIntent(ACTION_RESUME, 2))
+                } else {
+                    NotificationCompat.Action(0, "Pause", servicePendingIntent(ACTION_PAUSE, 1))
+                },
             )
+            .addAction(0, "Stop", servicePendingIntent(ACTION_STOP, 0))
             .build()
+
+    private fun servicePendingIntent(action: String, requestCode: Int): PendingIntent =
+        PendingIntent.getService(
+            this,
+            requestCode,
+            Intent(this, CameraTrackingService::class.java).setAction(action),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
 
     companion object {
         const val ACTION_START = "com.example.saccadacusandroid.action.START"
         const val ACTION_STOP = "com.example.saccadacusandroid.action.STOP"
+        const val ACTION_PAUSE = "com.example.saccadacusandroid.action.PAUSE"
+        const val ACTION_RESUME = "com.example.saccadacusandroid.action.RESUME"
         private const val CHANNEL_ID = "saccadacus_tracking"
         private const val NOTIF_ID = 1
         private const val NOTIF_UPDATE_INTERVAL_MS = 2000L
