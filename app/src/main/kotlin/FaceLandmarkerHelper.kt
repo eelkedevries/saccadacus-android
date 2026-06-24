@@ -2,11 +2,11 @@ package com.example.saccadacusandroid
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.util.Log
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
-import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
@@ -45,13 +45,25 @@ class FaceLandmarkerHelper(
         }
     }
 
-    /** Feed one frame. [timestampMs] must be strictly increasing across calls. */
+    /**
+     * Feed one frame. [timestampMs] must be strictly increasing across calls.
+     *
+     * The frame is rotated upright here (rather than via [ImageProcessingOptions]) because
+     * MediaPipe does not apply that rotation hint to the returned landmark coordinates or
+     * the facial-transformation matrix — leaving the face sideways (a constant ~90° roll)
+     * and corrupting the eye-corner projection. Rotating the bitmap is the approach the
+     * official CameraX + MediaPipe sample uses. The front-camera mirror is handled
+     * downstream in [SignConvention], so it is deliberately not applied here.
+     */
     fun detectAsync(bitmap: Bitmap, rotationDegrees: Int, timestampMs: Long) {
-        val mpImage = BitmapImageBuilder(bitmap).build()
-        val imageOptions = ImageProcessingOptions.builder()
-            .setRotationDegrees(rotationDegrees)
-            .build()
-        faceLandmarker?.detectAsync(mpImage, imageOptions, timestampMs)
+        val upright = if (rotationDegrees % 360 == 0) {
+            bitmap
+        } else {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        }
+        val mpImage = BitmapImageBuilder(upright).build()
+        faceLandmarker?.detectAsync(mpImage, timestampMs)
     }
 
     fun close() {
