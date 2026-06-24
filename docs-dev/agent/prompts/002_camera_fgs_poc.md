@@ -22,8 +22,9 @@ must run; CI only proves the APK builds.
 
 1. **Manifest & build:** add `CAMERA`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CAMERA`,
    and `POST_NOTIFICATIONS` permissions; declare a `<service>` with
-   `android:foregroundServiceType="camera"`. Set `minSdk = 29` and `applicationId =
-   "com.saccadacus.android"` (per spec defaults), and `android:allowBackup="false"`.
+   `android:foregroundServiceType="camera"`. Set `minSdk = 30` and `applicationId =
+   "com.saccadacus.android"` (per spec; camera FGS type requires API 30), and
+   `android:allowBackup="false"`.
 2. **CameraX deps:** add CameraX (`camera-core`, `camera-camera2`, `camera-lifecycle`) to
    `gradle/libs.versions.toml` and `app/build.gradle.kts`.
 3. **Foreground service:** create a notification channel; `startForeground(...,

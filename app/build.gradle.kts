@@ -11,8 +11,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.saccadacusandroid"
-        minSdk = 24
+        applicationId = "com.saccadacus.android"
+        minSdk = 30
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.lifecycle.service)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
