@@ -1,12 +1,15 @@
 package com.example.saccadacusandroid
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -38,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.saccadacusandroid.ui.theme.AppTheme
+import java.io.File
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -172,9 +176,16 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         Button(
             enabled = !running,
+            onClick = { saveLatestSessionToDownloads(context) },
+        ) {
+            Text("Save CSV to Downloads")
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            enabled = !running,
             onClick = { shareLatestSession(context) },
         ) {
-            Text("Export session CSV")
+            Text("Share session CSV")
         }
 
         Spacer(Modifier.height(24.dp))
@@ -245,11 +256,15 @@ private fun stopTrackingService(context: Context) {
     context.startService(intent)
 }
 
-private fun shareLatestSession(context: Context) {
-    val dir = context.getExternalFilesDir(null) ?: return
-    val csv = dir.listFiles()
+private fun latestSessionCsv(context: Context): File? {
+    val dir = context.getExternalFilesDir(null) ?: return null
+    return dir.listFiles()
         ?.filter { it.name.startsWith("session_") && it.name.endsWith(".csv") }
-        ?.maxByOrNull { it.lastModified() } ?: return
+        ?.maxByOrNull { it.lastModified() }
+}
+
+private fun shareLatestSession(context: Context) {
+    val csv = latestSessionCsv(context) ?: return
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", csv)
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
@@ -257,6 +272,39 @@ private fun shareLatestSession(context: Context) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(
-        Intent.createChooser(send, "Export session CSV").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        Intent.createChooser(send, "Share session CSV").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
+}
+
+/**
+ * Copy the most recent session CSV into the device's public Downloads collection via
+ * MediaStore, so it lands in Files → Downloads with no share-sheet and no third-party
+ * app. The Downloads collection is writable without a storage permission on API 29+.
+ */
+private fun saveLatestSessionToDownloads(context: Context) {
+    val csv = latestSessionCsv(context) ?: run {
+        Toast.makeText(context, "No session CSV yet — record and stop a session first.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val resolver = context.contentResolver
+    val pending = ContentValues().apply {
+        put(MediaStore.Downloads.DISPLAY_NAME, csv.name)
+        put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+        put(MediaStore.Downloads.IS_PENDING, 1)
+    }
+    val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    val uri = resolver.insert(collection, pending) ?: run {
+        Toast.makeText(context, "Could not save to Downloads.", Toast.LENGTH_LONG).show()
+        return
+    }
+    try {
+        resolver.openOutputStream(uri)?.use { output ->
+            csv.inputStream().use { input -> input.copyTo(output) }
+        } ?: error("could not open Downloads file for writing")
+        resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+        Toast.makeText(context, "Saved to Downloads: ${csv.name}", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        resolver.delete(uri, null, null)
+        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
+    }
 }
