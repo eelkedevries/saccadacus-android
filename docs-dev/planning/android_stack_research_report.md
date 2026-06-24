@@ -62,9 +62,9 @@ benchmark that must produce it is named instead.
 
 **Feasible, with one genuinely uncertain dimension.** Android *documents and
 sanctions* exactly this access pattern: the `camera` foreground-service type exists
-specifically so an app can "continue accessing the camera from the background while
-the user multitasks" (the docs' canonical example is video-chat) [DOCUMENTED,
-https://developer.android.com/about/versions/14/changes/fgs-types-required]. What is
+specifically so an app can multitask — verbatim *"Continue to access the camera from
+the background, such as video chat apps that allow for multitasking"* **[VERIFIED ✓
+re-fetched 2026-06-24, https://developer.android.com/about/versions/14/changes/fgs-types-required]**. What is
 **not** guaranteed by any documentation is **long-session survival under OEM battery
 management and screen-off**, which is the load-bearing empirical unknown (§5, §15).
 
@@ -106,9 +106,15 @@ because they are the ones that *exclude* otherwise-reasonable options.
 - Because `CAMERA` is a **while-in-use** permission, a camera FGS **cannot be started
   from the background** — it must be started **while the app has a visible activity**
   (the "must start while visible" rule); otherwise `SecurityException` /
-  `ForegroundServiceStartNotAllowedException` [DOCUMENTED,
-  .../fgs/restrictions-bg-start; .../14/changes/fgs-types-required]. This *matches*
-  Saccadacus's intended UX (start while visible, then switch away).
+  `ForegroundServiceStartNotAllowedException` **[VERIFIED ✓ re-fetched 2026-06-24:**
+  *"you must call `Context.startForegroundService()` or `Context.bindService()` while
+  your app has a visible activity, unless the service falls into one of the … exemptions"*
+  (.../fgs/restrictions-bg-start) and *"you cannot create a `camera` foreground service
+  while your app is in the background, with a few exceptions"*
+  (.../14/changes/fgs-types-required)**]. This *matches* Saccadacus's intended UX (start
+  while visible, then switch away); the documented exemptions (system component,
+  notification/widget/PendingIntent from a visible app, device-owner, etc.) do not cover
+  our case, so visible-start is mandatory.
 - Android 15 (API 35): a `BOOT_COMPLETED` receiver **cannot** launch a `camera` FGS
   [DOCUMENTED, .../15/behavior-changes-15] — so **no auto-start on boot**; tracking is
   always user-initiated (which is also the privacy requirement).
@@ -170,7 +176,7 @@ previewless in the service, or won't hold the front camera through screen-off
 
 | Backend | Eye/iris | Blink | Head pose | Play Services | Licence | Off-Play fit |
 |---|---|---|---|---|---|---|
-| **MediaPipe Tasks Vision Face Landmarker** | 478 landmarks incl. **iris** (5/eye); **no labelled pupil** | 52 **blendshapes** (eyeBlink_L/R) | facial-transform matrix | **None — standalone Maven `com.google.mediapipe:tasks-vision`** [DOCUMENTED, ai.google.dev/.../setup_android] | Apache-2.0 (code); **verify model-card licence** | **Best** |
+| **MediaPipe Tasks Vision Face Landmarker** | 478 landmarks incl. **iris** (5/eye); **no labelled pupil** | 52 **blendshapes** (eyeBlink_L/R) | facial-transform matrix | **None — standalone Maven `com.google.mediapipe:tasks-vision`** [CORROBORATED — workflow quote + Context7/`mediapipe-samples`] | Apache-2.0 (code); **verify model-card licence** | **Best** |
 | ML Kit Face Detection | head Euler + eye-open prob; **no iris** | eye-open prob | Euler Y/Z | **Bundled path = no GMS** (`com.google.mlkit:face-detection:16.1.7`); unbundled = GMS [DOCUMENTED, ml-kit/.../installation-paths] | — | OK (degraded) |
 | Custom LiteRT/TFLite | model-dependent | — | — | **LiteRT-in-Play-Services path needs GMS; bundled LiteRT needed off-Play** [DOCUMENTED, ai.google.dev/edge/litert/android/play_services] | — | OK w/ bundling |
 | ONNX Runtime Mobile / ExecuTorch | model-dependent | — | — | None | varies | OK, but most build effort |
@@ -185,11 +191,13 @@ are tracked separately per the brief's licence rule).
 ## 9. Pupil-tracking feasibility (load-bearing Q2)
 
 - MediaPipe Iris / Face Mesh output **478 landmarks = 468 + 10 iris (5/eye)**, tracing
-  the **iris contour**, *not* a pupil centre [DOCUMENTED,
-  github.com/google-ai-edge/mediapipe/.../iris.md]. The Face Landmarker page mentions
-  no "pupil"/"iris"/"gaze" labelled output at all [DOCUMENTED, ai.google.dev
-  /.../face_landmarker/android]. MediaPipe Iris **does not estimate gaze** — camera-
-  relative landmarks only [DOCUMENTED, research.google/blog/mediapipe-iris...].
+  the **iris contour**, *not* a pupil centre **[VERIFIED ✓ re-fetched 2026-06-24:** *"478
+  3D landmarks … 10 additional iris landmarks appended at the end (5 for each eye)"* and
+  *"iris landmarks (along this iris contour)"*, github.com/google-ai-edge/mediapipe/…/iris.md]**.
+  The Face Landmarker page exposes no labelled "pupil"/"gaze" output [DOCUMENTED,
+  ai.google.dev/…/face_landmarker/android — independent re-fetch blocked by host 403].
+  MediaPipe Iris **does not estimate gaze** **[VERIFIED ✓:** *"iris tracking does not
+  infer the location at which people are looking"*, github.com/…/iris.md]**.
 - **RITnet** segments a *distinct pupil region* (4-class), ~170k params, **<1 MB** —
   but its >300 Hz figure is on a **desktop GTX 1080 Ti**, not a phone [DOCUMENTED,
   arxiv.org/pdf/1910.00694], and it targets **near-eye** eye images.
@@ -418,6 +426,27 @@ Repos: `eelkedevries/saccadacus-android` (local), `eelkedevries/saccadacus` (mai
 > **Method note:** the deep-research run completed Scope→Search→Fetch and 25 of its
 > adversarial verifications before hitting the session model limit (resets 16:40 UTC),
 > which aborted the remaining verifications and the automated synthesis. Two FGS claims
-> are [VERIFIED 3-0]; the rest are quoted from the cited primary sources but were not
-> independently re-verified, and are tagged [DOCUMENTED] accordingly. Re-running the
-> verifier after the reset could upgrade those tags.
+> were [VERIFIED 3-0] by the workflow.
+>
+> **Verification pass 2 (2026-06-24, by direct source re-fetch):** the three most
+> load-bearing remaining claims were independently re-checked against their primary
+> sources and **confirmed with verbatim quotes** — now tagged **[VERIFIED ✓]** above:
+> (a) the camera-FGS "must start while visible" rule + the SecurityException on
+> background start (developer.android.com .../fgs/restrictions-bg-start and
+> .../14/changes/fgs-types-required); (b) the camera-FGS multitasking use case
+> ("such as video chat apps"); and (c) MediaPipe outputs **iris** landmarks (5/eye),
+> not a pupil centre, and "does not infer the location at which people are looking"
+> (github.com/google-ai-edge/mediapipe .../iris.md). These confirm the feasibility
+> verdict and the defer-pupil decision — the two conclusions that most drive the
+> recommendation. The two Play-Services-dependency claims sit on hosts that **403 my
+> direct fetch** (`developers.google.com`, `ai.google.dev` — egress-blocked this
+> session). The **MediaPipe** one was instead **corroborated via a sanctioned alternate
+> source** (Context7 → the official `google-ai-edge/mediapipe-samples` repo), whose
+> Android Face Landmarker demo uses the standalone `com.google.mediapipe:tasks-*` Maven
+> dependency with the model `.task` bundled into assets and **no Google Play Services
+> dependency** — now tagged **[CORROBORATED]** in §8. The **ML Kit** bundled-vs-unbundled
+> claim retains [DOCUMENTED]; it is in any case self-evidencing, since the two delivery
+> paths are *distinct Maven artifacts* (`com.google.mlkit:face-detection` = bundled/no-GMS
+> vs `com.google.android.gms:play-services-mlkit-face-detection` = unbundled/GMS).
+> Everything still tagged [DOCUMENTED] is a single-pass primary-source quote;
+> [INFERENCE]/[NEEDS DEVICE TEST] items are unchanged.
