@@ -23,6 +23,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the gitleaks step can diff multi-commit pushes
+          # (a shallow clone lacks parent commits and fails the range scan).
+          fetch-depth: 0
 
       - name: Set up JDK
         uses: actions/setup-java@v4
