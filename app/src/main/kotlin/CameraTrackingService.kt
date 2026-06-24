@@ -21,6 +21,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import java.io.BufferedWriter
 import java.io.File
@@ -75,6 +76,9 @@ class CameraTrackingService : LifecycleService() {
     private var cameraLoss: SessionRecorder.LossInterval? = null
     @Volatile private var lastReacquireMs = 0L
 
+    // Debug overlay (015): throttled publish of landmark points, only when enabled.
+    private var lastOverlayMs = 0L
+
     // Export (008)
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
@@ -106,6 +110,7 @@ class CameraTrackingService : LifecycleService() {
         markerCount = 0
         cameraLoss = null
         lastReacquireMs = 0L
+        lastOverlayMs = 0L
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -246,6 +251,7 @@ class CameraTrackingService : LifecycleService() {
             }
         }
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
+        maybePublishOverlay(faces, detected)
         val frame = FaceSignalAdapter.toResult(result)
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
@@ -261,6 +267,27 @@ class CameraTrackingService : LifecycleService() {
                 sensorsActive = motionSensors?.active == true,
                 markerCount = markerCount,
             ),
+        )
+    }
+
+    /** Publish landmark points for the debug overlay, throttled, only when enabled (015). */
+    private fun maybePublishOverlay(faces: List<List<NormalizedLandmark>>, detected: Boolean) {
+        if (!OverlayConfig.enabled) return
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - lastOverlayMs < OVERLAY_INTERVAL_MS) return
+        lastOverlayMs = nowMs
+        if (!detected) {
+            OverlayStats.clear()
+            return
+        }
+        val lm = faces[0]
+        val arr = FloatArray(lm.size * 2)
+        for (i in lm.indices) {
+            arr[i * 2] = lm[i].x()
+            arr[i * 2 + 1] = lm[i].y()
+        }
+        OverlayStats.update(
+            OverlayFrame(arr, FaceMeshIndices.IMG_LEFT_IRIS_CENTRE, FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE),
         )
     }
 
@@ -578,6 +605,7 @@ class CameraTrackingService : LifecycleService() {
         logWriter = null
         TrackingStats.onStop()
         SignalStats.clear()
+        OverlayStats.clear()
         eventAccumulator.reset()
         motionSensors?.stop()
         motionSensors = null
@@ -643,6 +671,7 @@ class CameraTrackingService : LifecycleService() {
         private const val FRAME_WATCHDOG_INTERVAL_MS = 2000L
         private const val FRAME_LOSS_THRESHOLD_MS = 4000L
         private const val REACQUIRE_INTERVAL_MS = 3000L
+        private const val OVERLAY_INTERVAL_MS = 100L
         private const val TAG = "SaccadacusFGS"
     }
 }

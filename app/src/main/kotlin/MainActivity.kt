@@ -19,6 +19,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -40,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -70,10 +75,12 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val signals by SignalStats.state.collectAsState()
     val events by EventStats.state.collectAsState()
     val session by SessionStats.state.collectAsState()
+    val overlay by OverlayStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
     var rawVideo by remember { mutableStateOf(SessionConfig.rawVideoEnabled) }
+    var overlayEnabled by remember { mutableStateOf(OverlayConfig.enabled) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -165,6 +172,10 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             enabled = !batteryExempt,
             onClick = { requestIgnoreBatteryOptimizations(context) },
         ) { Text(if (batteryExempt) "Battery: unrestricted ✓" else "Allow background (battery)") }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = { overlayEnabled = !overlayEnabled; OverlayConfig.enabled = overlayEnabled },
+        ) { Text(if (overlayEnabled) "Overlay: ON (watch the iris)" else "Overlay: OFF") }
         Spacer(Modifier.height(16.dp))
         Button(
             enabled = !running,
@@ -248,6 +259,35 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
         if (running && rawVideo) {
             Text("● Recording raw video")
+        }
+        if (overlayEnabled) {
+            Spacer(Modifier.height(12.dp))
+            Text("Overlay (green = face mesh, red = iris). Look around — the red dots should follow your eyes.")
+            Spacer(Modifier.height(4.dp))
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .background(Color.Black),
+            ) {
+                val of = overlay
+                if (of != null && of.landmarks.size >= 2) {
+                    val w = size.width
+                    val h = size.height
+                    var i = 0
+                    while (i + 1 < of.landmarks.size) {
+                        // Mirror x to a selfie view (matches SignConvention); y is image-down.
+                        drawCircle(Color.Green, radius = 2f, center = Offset((1f - of.landmarks[i]) * w, of.landmarks[i + 1] * h))
+                        i += 2
+                    }
+                    for (idx in intArrayOf(of.leftIrisIndex, of.rightIrisIndex)) {
+                        val base = idx * 2
+                        if (base + 1 < of.landmarks.size) {
+                            drawCircle(Color.Red, radius = 9f, center = Offset((1f - of.landmarks[base]) * w, of.landmarks[base + 1] * h))
+                        }
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
