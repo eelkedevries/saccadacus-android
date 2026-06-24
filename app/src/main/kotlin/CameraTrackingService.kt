@@ -48,6 +48,9 @@ class CameraTrackingService : LifecycleService() {
     private var resultFrames = 0L
     private var benchStartNanos = 0L
 
+    // Events (006)
+    private val eventAccumulator = EventAccumulator()
+
     override fun onCreate() {
         super.onCreate()
         analysisExecutor = Executors.newSingleThreadExecutor()
@@ -67,6 +70,7 @@ class CameraTrackingService : LifecycleService() {
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
+        eventAccumulator.reset()
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
@@ -158,7 +162,9 @@ class CameraTrackingService : LifecycleService() {
             }
         }
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
-        SignalStats.update(FaceSignalAdapter.toResult(result))
+        val frame = FaceSignalAdapter.toResult(result)
+        SignalStats.update(frame)
+        eventAccumulator.onResult(frame, result.timestampMs())
     }
 
     private fun publishBenchmark() {
@@ -289,6 +295,7 @@ class CameraTrackingService : LifecycleService() {
         logWriter = null
         TrackingStats.onStop()
         SignalStats.clear()
+        eventAccumulator.reset()
     }
 
     private fun createChannel() {

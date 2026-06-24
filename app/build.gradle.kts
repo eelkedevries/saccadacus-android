@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.mediapipe.tasks.vision)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    testImplementation(libs.junit)
 }
 
 // Fetch the MediaPipe Face Landmarker model into assets at build time (prompt 003).

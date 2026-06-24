@@ -57,6 +57,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val snapshot by TrackingStats.state.collectAsState()
     val benchmark by BenchmarkStats.state.collectAsState()
     val signals by SignalStats.state.collectAsState()
+    val events by EventStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
@@ -152,6 +153,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             Text("R eye-local x/y: ${fmt(s.rightEye?.irisXLocal)} / ${fmt(s.rightEye?.irisYLocal)}")
             Text("Head yaw/pitch/roll: ${headPoseText(s.headPose)}")
         }
+        Text("Saccades ${events.saccades} · Blinks ${events.blinks} · ${events.headMotionLabel}")
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }
