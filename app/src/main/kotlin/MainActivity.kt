@@ -184,6 +184,10 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 enabled = running && paused,
                 onClick = { resumeTrackingService(context) },
             ) { Text("Resume") }
+            Button(
+                enabled = running,
+                onClick = { markTrackingService(context) },
+            ) { Text("Mark") }
         }
         Spacer(Modifier.height(12.dp))
         Button(
@@ -217,7 +221,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             Text("Head yaw/pitch/roll: ${headPoseText(s.headPose)}")
         }
         Text("Saccades ${events.saccades} · Blinks ${events.blinks} · ${events.headMotionLabel}")
-        Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · sensors ${if (session.sensorsActive) "on" else "off"}")
+        Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · ${session.markerCount} marks · sensors ${if (session.sensorsActive) "on" else "off"}")
         Spacer(Modifier.height(12.dp))
         Text(
             when {
@@ -278,6 +282,12 @@ private fun pauseTrackingService(context: Context) {
 private fun resumeTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)
         .setAction(CameraTrackingService.ACTION_RESUME)
+    context.startService(intent)
+}
+
+private fun markTrackingService(context: Context) {
+    val intent = Intent(context, CameraTrackingService::class.java)
+        .setAction(CameraTrackingService.ACTION_MARK)
     context.startService(intent)
 }
 

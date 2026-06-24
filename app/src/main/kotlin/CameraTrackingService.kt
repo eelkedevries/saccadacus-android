@@ -64,6 +64,9 @@ class CameraTrackingService : LifecycleService() {
     // Session (007)
     private var motionSensors: MotionSensors? = null
 
+    // Interaction markers (012)
+    @Volatile private var markerCount = 0
+
     // Export (008)
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
@@ -84,6 +87,7 @@ class CameraTrackingService : LifecycleService() {
             ACTION_STOP -> stopTracking()
             ACTION_PAUSE -> pause()
             ACTION_RESUME -> resume()
+            ACTION_MARK -> onMark()
             else -> startTracking()
         }
         return START_NOT_STICKY
@@ -91,6 +95,7 @@ class CameraTrackingService : LifecycleService() {
 
     private fun startTracking() {
         paused = false
+        markerCount = 0
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -242,6 +247,7 @@ class CameraTrackingService : LifecycleService() {
                 sensorSampleCount = SessionRecorder.sensorSamples.size,
                 lossIntervalCount = SessionRecorder.lossIntervals.size,
                 sensorsActive = motionSensors?.active == true,
+                markerCount = markerCount,
             ),
         )
     }
@@ -439,6 +445,25 @@ class CameraTrackingService : LifecycleService() {
         }
     }
 
+    /** Record a user interaction marker as a `task` row at the current canonical timestamp (012). */
+    private fun onMark() {
+        val writer = csvWriter ?: return // ignored when no session is active
+        val now = SystemClock.elapsedRealtimeNanos()
+        markerCount++
+        writer.appendTask("mark", "", now)
+        SessionStats.update(
+            SessionSummary(
+                recording = true,
+                sampleCount = SessionRecorder.samples.size,
+                sensorSampleCount = SessionRecorder.sensorSamples.size,
+                lossIntervalCount = SessionRecorder.lossIntervals.size,
+                sensorsActive = motionSensors?.active == true,
+                markerCount = markerCount,
+            ),
+        )
+        Log.i(TAG, "marker #$markerCount at $now")
+    }
+
     private fun stopTracking() {
         writeBenchmarkCsv()
         finalizeSessionCsv()
@@ -490,6 +515,7 @@ class CameraTrackingService : LifecycleService() {
                 sensorSampleCount = SessionRecorder.sensorSamples.size,
                 lossIntervalCount = SessionRecorder.lossIntervals.size,
                 sensorsActive = false,
+                markerCount = markerCount,
             ),
         )
     }
@@ -519,6 +545,7 @@ class CameraTrackingService : LifecycleService() {
                     NotificationCompat.Action(0, "Pause", servicePendingIntent(ACTION_PAUSE, 1))
                 },
             )
+            .addAction(0, "Mark", servicePendingIntent(ACTION_MARK, 3))
             .addAction(0, "Stop", servicePendingIntent(ACTION_STOP, 0))
             .build()
 
@@ -535,6 +562,7 @@ class CameraTrackingService : LifecycleService() {
         const val ACTION_STOP = "com.example.saccadacusandroid.action.STOP"
         const val ACTION_PAUSE = "com.example.saccadacusandroid.action.PAUSE"
         const val ACTION_RESUME = "com.example.saccadacusandroid.action.RESUME"
+        const val ACTION_MARK = "com.example.saccadacusandroid.action.MARK"
         private const val CHANNEL_ID = "saccadacus_tracking"
         private const val NOTIF_ID = 1
         private const val NOTIF_UPDATE_INTERVAL_MS = 2000L

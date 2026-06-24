@@ -11,6 +11,7 @@ data class SessionSummary(
     val sensorSampleCount: Int = 0,
     val lossIntervalCount: Int = 0,
     val sensorsActive: Boolean = false,
+    val markerCount: Int = 0,
 )
 
 object SessionStats {

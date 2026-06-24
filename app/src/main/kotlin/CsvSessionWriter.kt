@@ -39,6 +39,7 @@ class CsvSessionWriter(private val dir: File) {
         }
     }
 
+    @Synchronized
     fun appendSample(frame: TrackingFrameResult, tElapsedNanos: Long, cameraSensorTs: Long, cameraTsSource: String) {
         val w = writer ?: return
         val l = frame.leftEye
@@ -59,6 +60,7 @@ class CsvSessionWriter(private val dir: File) {
         writeRow(w, row)
     }
 
+    @Synchronized
     fun appendSaccade(event: SaccadeEvent) {
         val w = writer ?: return
         val row = emptyRow()
@@ -70,6 +72,7 @@ class CsvSessionWriter(private val dir: File) {
         writeRow(w, row)
     }
 
+    @Synchronized
     fun appendBlink(event: BlinkEvent) {
         val w = writer ?: return
         val row = emptyRow()
@@ -80,7 +83,20 @@ class CsvSessionWriter(private val dir: File) {
         writeRow(w, row)
     }
 
+    /** Append a user interaction marker as a `task` row (prompt 012); columns per the schema. */
+    @Synchronized
+    fun appendTask(label: String, note: String, tElapsedNanos: Long) {
+        val w = writer ?: return
+        val row = emptyRow()
+        row[0] = tElapsedNanos.toString()
+        row[3] = wallAnchorMs.toString()
+        row[4] = "task"; row[5] = trackingMode; row[6] = eyeMode
+        row[32] = csv(label); row[33] = csv(note)
+        writeRow(w, row)
+    }
+
     /** Flush, close, and atomically rename temp -> final. Returns the readable file. */
+    @Synchronized
     fun finalizeSession(): File? {
         val w = writer ?: return finalFile ?: tmpFile
         try {
@@ -110,6 +126,9 @@ class CsvSessionWriter(private val dir: File) {
     private fun f(v: Float?): String = if (v == null || v.isNaN()) "" else String.format(Locale.ROOT, "%.5f", v)
 
     private fun f(v: Double): String = String.format(Locale.ROOT, "%.5f", v)
+
+    /** Keep free text on one CSV cell: no commas or newlines. */
+    private fun csv(s: String): String = s.replace(',', ';').replace('\n', ' ').replace('\r', ' ')
 
     companion object {
         private const val TAG = "CsvSessionWriter"
