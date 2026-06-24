@@ -51,6 +51,9 @@ class CameraTrackingService : LifecycleService() {
     // Events (006)
     private val eventAccumulator = EventAccumulator()
 
+    // Session (007)
+    private var motionSensors: MotionSensors? = null
+
     override fun onCreate() {
         super.onCreate()
         analysisExecutor = Executors.newSingleThreadExecutor()
@@ -71,6 +74,8 @@ class CameraTrackingService : LifecycleService() {
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
         eventAccumulator.reset()
+        SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
+        motionSensors = MotionSensors(this).also { it.start() }
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
@@ -165,6 +170,16 @@ class CameraTrackingService : LifecycleService() {
         val frame = FaceSignalAdapter.toResult(result)
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
+        SessionRecorder.addSample(frame, SystemClock.elapsedRealtimeNanos())
+        SessionStats.update(
+            SessionSummary(
+                recording = true,
+                sampleCount = SessionRecorder.samples.size,
+                sensorSampleCount = SessionRecorder.sensorSamples.size,
+                lossIntervalCount = SessionRecorder.lossIntervals.size,
+                sensorsActive = motionSensors?.active == true,
+            ),
+        )
     }
 
     private fun publishBenchmark() {
@@ -296,6 +311,18 @@ class CameraTrackingService : LifecycleService() {
         TrackingStats.onStop()
         SignalStats.clear()
         eventAccumulator.reset()
+        motionSensors?.stop()
+        motionSensors = null
+        SessionRecorder.stop(System.currentTimeMillis())
+        SessionStats.update(
+            SessionSummary(
+                recording = false,
+                sampleCount = SessionRecorder.samples.size,
+                sensorSampleCount = SessionRecorder.sensorSamples.size,
+                lossIntervalCount = SessionRecorder.lossIntervals.size,
+                sensorsActive = false,
+            ),
+        )
     }
 
     private fun createChannel() {
