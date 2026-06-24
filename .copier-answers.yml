@@ -1,0 +1,24 @@
+# This file is maintained by Copier; do not edit by hand.
+# It records the answers used to generate this project and enables `copier update`.
+_commit: b8f07f5
+_src_path: gh:eelkedevries/eek-a-template
+android_compile_sdk: '37'
+android_min_sdk: '24'
+android_package: com.example.saccadacusandroid
+android_target_sdk: '36'
+description: Saccadacus is an Android application.
+jdk_version: '17'
+language_locale: British English in code, comments, and user-facing text.
+license: none
+project_name: saccadacus-android
+project_title: Saccadacus Android
+stack: android-kotlin + jetpack-compose
+stack_kind: android
+static_site: false
+testing_policy: no tests unless a prompt asks for them.
+verify_command: '`./gradlew assembleDebug --no-daemon` (CI builds the APK on a hosted
+    runner).'
+visibility: public
+workflow_policy: commit and push directly to `main`; no feature branches or pull requests
+    unless explicitly requested.
+

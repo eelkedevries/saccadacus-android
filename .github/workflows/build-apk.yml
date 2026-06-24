@@ -1,0 +1,49 @@
+# Android stack CI: builds a debug APK on a GitHub-hosted runner and exposes it
+# as a downloadable artefact. No on-device compilation and no signing secrets —
+# the debug key suffices for sideloading. Hosted ubuntu-latest runners are
+# x86-64 glibc machines with the Android SDK preinstalled, so no SDK/Gradle setup
+# action is needed and the on-device aarch64 / aapt2 constraints do not apply.
+#
+# This is the automated safety net for the commit-to-`main` workflow: it runs on
+# every push (and PRs to main), so broken builds or leaked secrets are caught
+# mechanically even if local pre-commit hooks were never installed.
+name: Build APK
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Validate prompt numbering
+        run: bash scripts/validate-prompts.sh
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

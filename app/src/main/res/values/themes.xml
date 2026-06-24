@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window theme applied before Compose draws its first frame. The in-app
+         styling lives in the Material 3 theme in ui/theme/Theme.kt. -->
+    <style name="Theme.App" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
