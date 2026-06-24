@@ -71,13 +71,17 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   overlay (015), low-light/face-lost alert (016), sessions screen (017), and session naming
   + notes (018) round it out. Each prompt carried a "Cross-prompt impact check"; none
   invalidated a later prompt. **With this, the written v1 spec (§Scope) is fully implemented.**
-- **Backlog beyond v1 (not yet drafted):** the next tier is *scientific validity* —
-  fixation detection + per-session summary stats, an on-device calibration routine, signal
-  filtering, and timestamp/latency validation — plus *robustness* (orphaned-`.tmp` session
-  recovery, orientation handling, largest-face lock, storage/thermal guards) and *polish*
-  (settings persistence via DataStore, user docs + CSV dictionary, onboarding, release
-  signing/R8, more unit tests). Calibration/filtering specifics depend on the daylight gaze
-  retest, which remains the gating next step.
+- **Beyond-v1 queue `019`–`028` is drafted** (executing): fixation detection (019),
+  per-session summary stats (020), optional eye-local filtering (021), orphaned-`.tmp`
+  recovery (022), orientation robustness (023), resource guards — storage/thermal (024),
+  settings persistence via DataStore (025), onboarding + identity (026), user docs (027),
+  and expanded unit tests (028). Each carries a "Cross-prompt impact check".
+- **Deliberately deferred (not drafted), with reasons:** an on-device **calibration
+  routine** and **gaze-from-eye-look-blendshapes** both depend on a confirmed-working gaze
+  signal (the daylight retest) — and blendshape gaze would also extend the binding CSV
+  schema (a spec decision). **Release signing + R8/distribution** needs a keystore/secret
+  (must not live in a public repo) and isn't exercised by the `assembleDebug` CI gate.
+  The daylight gaze retest remains the gating step for the calibration/gaze work.
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
