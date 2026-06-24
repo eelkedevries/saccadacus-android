@@ -95,12 +95,16 @@ User-facing text: clear, neutral, research-appropriate.
   incremental CSV. Fallbacks: Camera2 (if CameraX can't drive a previewless service-owned
   front camera / expose the timestamp source); ML Kit Face Detection (bundled, no Play
   Services) as a degraded tracker (loses iris).
-- **SDK:** `minSdk 29` *(provisional default — to confirm)*; `targetSdk 35` → 36 once
-  confirmed stable; `compileSdk` per scaffold (**verify `37`/AGP `9.2.0` are stable, not
-  preview**).
+- **SDK:** `minSdk 29` (Android 10) — **decided**: oldest API with the `camera`
+  foreground-service type, while still covering essentially all in-use devices; chosen
+  over 34 (which would needlessly exclude Android 10–13 participant phones) and over 24
+  (fragile, heavily guarded background-camera code). `targetSdk 35` → 36 once confirmed
+  stable; `compileSdk` per scaffold (**verify `37`/AGP `9.2.0` are stable, not preview**
+  when the build is next touched).
 - **True pupil-centre tracking deferred from v1** (iris-centre only).
 - **No raw video by default;** optional, consent-gated. **Off-Play research distribution.**
-- **`applicationId`:** `com.saccadacus.android` *(provisional default — to confirm)*.
+- **`applicationId`:** `com.saccadacus.android` (decided; change only if a specific
+  domain/brand is preferred).
 - **Verify command:** `./gradlew assembleDebug --no-daemon` (CI builds the debug APK).
 - **Largest open risk** (not a decision): OEM/screen-off frame survival — settled only by
   on-device testing (the prompt 002 proof-of-feasibility).

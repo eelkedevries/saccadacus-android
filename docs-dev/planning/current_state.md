@@ -21,7 +21,7 @@ from the Android-stack research:
   while visible; the browser repo's **algorithms and data model** are ported (it has no
   production tracker to lift).
 - **True pupil tracking deferred** (iris-centre only); raw video off by default.
-- Provisional, to confirm: `minSdk 29`, `applicationId com.saccadacus.android`.
+- **Decided:** `minSdk 29` (Android 10), `applicationId com.saccadacus.android` (see spec).
 
 Supporting research (non-binding) lives in `docs-dev/planning/`:
 `android_stack_research_brief.md`, `saccadacus_phase0_audit.md`,
