@@ -158,6 +158,7 @@ class CameraTrackingService : LifecycleService() {
             }
         }
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
+        SignalStats.update(FaceSignalAdapter.toResult(result))
     }
 
     private fun publishBenchmark() {
@@ -287,6 +288,7 @@ class CameraTrackingService : LifecycleService() {
         }
         logWriter = null
         TrackingStats.onStop()
+        SignalStats.clear()
     }
 
     private fun createChannel() {

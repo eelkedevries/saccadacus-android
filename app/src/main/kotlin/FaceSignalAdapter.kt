@@ -1,0 +1,96 @@
+package com.example.saccadacusandroid
+
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import kotlin.math.asin
+import kotlin.math.atan2
+
+/**
+ * Converts a MediaPipe [FaceLandmarkerResult] into derived [TrackingFrameResult] signals
+ * (prompt 005): eye-local iris position, blink state, and head pose. Mirroring / eye
+ * identity / sign conventions live in [SignConvention] and need on-device confirmation.
+ */
+object FaceSignalAdapter {
+
+    fun toResult(result: FaceLandmarkerResult): TrackingFrameResult {
+        val faces = result.faceLandmarks()
+        if (faces.isEmpty()) {
+            return TrackingFrameResult(false, 0f, null, null, null)
+        }
+        val landmarks = faces[0]
+
+        var blinkImgLeft = 0f
+        var blinkImgRight = 0f
+        val blendshapes = result.faceBlendshapes()
+        if (blendshapes.isPresent && blendshapes.get().isNotEmpty()) {
+            for (category in blendshapes.get()[0]) {
+                when (category.categoryName()) {
+                    "eyeBlinkLeft" -> blinkImgLeft = category.score()
+                    "eyeBlinkRight" -> blinkImgRight = category.score()
+                }
+            }
+        }
+
+        val imgLeftEye = eyeFeature(
+            landmarks,
+            FaceMeshIndices.IMG_LEFT_EYE_CORNER_OUTER,
+            FaceMeshIndices.IMG_LEFT_EYE_CORNER_INNER,
+            FaceMeshIndices.IMG_LEFT_IRIS_CENTRE,
+            blinkImgLeft,
+        )
+        val imgRightEye = eyeFeature(
+            landmarks,
+            FaceMeshIndices.IMG_RIGHT_EYE_CORNER_INNER,
+            FaceMeshIndices.IMG_RIGHT_EYE_CORNER_OUTER,
+            FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE,
+            blinkImgRight,
+        )
+
+        // Under a mirrored front camera, the image-left eye is the participant's right eye.
+        val participantLeft = if (SignConvention.MIRROR_X) imgRightEye else imgLeftEye
+        val participantRight = if (SignConvention.MIRROR_X) imgLeftEye else imgRightEye
+
+        return TrackingFrameResult(true, 1f, participantLeft, participantRight, headPose(result))
+    }
+
+    private fun eyeFeature(
+        landmarks: List<NormalizedLandmark>,
+        cornerAIndex: Int,
+        cornerBIndex: Int,
+        irisIndex: Int,
+        blinkScore: Float,
+    ): EyeFeature? {
+        if (irisIndex >= landmarks.size) return null
+        val a = participantPoint(landmarks[cornerAIndex])
+        val b = participantPoint(landmarks[cornerBIndex])
+        val iris = participantPoint(landmarks[irisIndex])
+        // Order so leftCorner is participant-left (smaller x), rightCorner participant-right.
+        val corners = if (a.x <= b.x) EyeCorners(a, b) else EyeCorners(b, a)
+        val local = projectEyeLocal(corners, iris)
+        return EyeFeature(local.xLocal, local.yLocal, 1f, blinkState(blinkScore))
+    }
+
+    private fun participantPoint(landmark: NormalizedLandmark): Point2D {
+        val x = if (SignConvention.MIRROR_X) 1f - landmark.x() else landmark.x()
+        val y = if (SignConvention.FLIP_Y) 1f - landmark.y() else landmark.y()
+        return Point2D(x, y)
+    }
+
+    private fun blinkState(score: Float): BlinkState = when {
+        score >= 0.5f -> BlinkState.CLOSED
+        score >= 0.2f -> BlinkState.CLOSING
+        else -> BlinkState.OPEN
+    }
+
+    /** Approximate yaw/pitch/roll from the 4x4 (row-major) facial transformation matrix. */
+    private fun headPose(result: FaceLandmarkerResult): HeadPose? {
+        val matrices = result.facialTransformationMatrixes()
+        if (!matrices.isPresent || matrices.get().isEmpty()) return null
+        val m = matrices.get()[0]
+        if (m.size < 16) return null
+        val yaw = Math.toDegrees(atan2(m[8].toDouble(), m[10].toDouble())).toFloat()
+        val pitch = Math.toDegrees(asin((-m[9]).toDouble().coerceIn(-1.0, 1.0))).toFloat()
+        val roll = Math.toDegrees(atan2(m[1].toDouble(), m[5].toDouble())).toFloat()
+        return HeadPose(yaw, pitch, roll)
+    }
+}

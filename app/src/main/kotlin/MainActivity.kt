@@ -56,6 +56,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
     val benchmark by BenchmarkStats.state.collectAsState()
+    val signals by SignalStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
@@ -145,6 +146,12 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         Text("Benchmark — analysed ${benchmark.analysedFps.toInt()} fps, dropped ${benchmark.droppedFrames}")
         Text("Inference ms: mean ${benchmark.latencyMeanMs.toInt()}, p50 ${benchmark.latencyP50Ms.toInt()}, p95 ${benchmark.latencyP95Ms.toInt()}")
+        signals?.let { s ->
+            Spacer(Modifier.height(8.dp))
+            Text("L eye-local x/y: ${fmt(s.leftEye?.irisXLocal)} / ${fmt(s.leftEye?.irisYLocal)}")
+            Text("R eye-local x/y: ${fmt(s.rightEye?.irisXLocal)} / ${fmt(s.rightEye?.irisYLocal)}")
+            Text("Head yaw/pitch/roll: ${headPoseText(s.headPose)}")
+        }
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }
@@ -165,6 +172,11 @@ private fun formatDuration(seconds: Double): String {
 }
 
 private fun formatSeconds(seconds: Double): String = "%.1f".format(seconds)
+
+private fun fmt(value: Float?): String = if (value == null) "-" else "%.3f".format(value)
+
+private fun headPoseText(pose: HeadPose?): String =
+    if (pose == null) "-" else "${pose.yawDeg.toInt()} / ${pose.pitchDeg.toInt()} / ${pose.rollDeg.toInt()}"
 
 private fun startTrackingService(context: Context) {
     val intent = Intent(context, CameraTrackingService::class.java)
