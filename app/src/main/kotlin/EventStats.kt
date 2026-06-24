@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 data class EventCounts(
     val saccades: Long = 0L,
     val blinks: Long = 0L,
+    val fixations: Long = 0L,
     val headMotionLabel: String = "-",
 )
 

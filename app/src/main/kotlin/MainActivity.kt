@@ -282,7 +282,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             Text("R eye-local x/y: ${fmt(s.rightEye?.irisXLocal)} / ${fmt(s.rightEye?.irisYLocal)}")
             Text("Head yaw/pitch/roll: ${headPoseText(s.headPose)}")
         }
-        Text("Saccades ${events.saccades} · Blinks ${events.blinks} · ${events.headMotionLabel}")
+        Text("Saccades ${events.saccades} · Fixations ${events.fixations} · Blinks ${events.blinks} · ${events.headMotionLabel}")
         Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · ${session.markerCount} marks · sensors ${if (session.sensorsActive) "on" else "off"}")
         Text("Name: ${sessionName.ifBlank { "(unnamed — uses timestamp)" }}" + if (sessionNote.isNotBlank()) " · note: $sessionNote" else "")
         Spacer(Modifier.height(12.dp))

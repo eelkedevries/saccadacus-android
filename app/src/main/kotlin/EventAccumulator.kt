@@ -13,8 +13,10 @@ class EventAccumulator {
     private var sinceDetect = 0
     private var saccadeCount = 0L
     private var blinkCount = 0L
+    private var fixationCount = 0L
     private var lastSaccadeOnset = Long.MIN_VALUE
     private var lastBlinkOnset = Long.MIN_VALUE
+    private var lastFixationOnset = Long.MIN_VALUE
     private var lastHeadYaw = Float.NaN
     private var lastHeadTsMs = 0L
     private var headLabel = "-"
@@ -62,7 +64,13 @@ class EventAccumulator {
                 blinkCount++
             }
         }
-        EventStats.update(EventCounts(saccadeCount, blinkCount, headLabel))
+        for (event in FixationDetector.detect(saccadeSamples.toList())) {
+            if (event.onsetMs > lastFixationOnset) {
+                lastFixationOnset = event.onsetMs
+                fixationCount++
+            }
+        }
+        EventStats.update(EventCounts(saccadeCount, blinkCount, fixationCount, headLabel))
     }
 
     fun reset() {
@@ -71,8 +79,10 @@ class EventAccumulator {
         sinceDetect = 0
         saccadeCount = 0L
         blinkCount = 0L
+        fixationCount = 0L
         lastSaccadeOnset = Long.MIN_VALUE
         lastBlinkOnset = Long.MIN_VALUE
+        lastFixationOnset = Long.MIN_VALUE
         lastHeadYaw = Float.NaN
         EventStats.clear()
     }

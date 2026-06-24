@@ -86,6 +86,69 @@ object SaccadeDetector {
     }
 }
 
+data class FixationEvent(
+    val onsetMs: Long,
+    val offsetMs: Long,
+    val durationMs: Long,
+    val centroidX: Double,
+    val centroidY: Double,
+    val confidence: Double,
+)
+
+/**
+ * Fixations (prompt 019): maximal runs of low inter-sample velocity (below the saccade
+ * onset speed) and small spatial dispersion, lasting at least [MIN_DURATION_MS]. Blink
+ * samples break a run. Operates on the same [SaccadeSample] stream as the saccade detector.
+ */
+object FixationDetector {
+    const val MAX_SPEED = SaccadeDetector.ONSET_SPEED   // eye-width units / second
+    const val MIN_DURATION_MS = 100L
+    const val MAX_DISPERSION = 0.15                      // eye-width units (guards against drift)
+
+    fun detect(samples: List<SaccadeSample>): List<FixationEvent> {
+        val n = samples.size
+        if (n < 2) return emptyList()
+        val events = ArrayList<FixationEvent>()
+        var i = 0
+        while (i < n) {
+            if (samples[i].isBlink) {
+                i++
+                continue
+            }
+            var j = i
+            while (j + 1 < n) {
+                val next = samples[j + 1]
+                if (next.isBlink) break
+                val dt = (next.tsMs - samples[j].tsMs) / 1000.0
+                val speed = if (dt > 0) {
+                    hypot((next.xLocal - samples[j].xLocal).toDouble(), (next.yLocal - samples[j].yLocal).toDouble()) / dt
+                } else {
+                    0.0
+                }
+                if (speed >= MAX_SPEED) break
+                j++
+            }
+            val durationMs = samples[j].tsMs - samples[i].tsMs
+            if (j > i && durationMs >= MIN_DURATION_MS) {
+                val xs = (i..j).map { samples[it].xLocal.toDouble() }
+                val ys = (i..j).map { samples[it].yLocal.toDouble() }
+                val dispersion = (xs.max() - xs.min()) + (ys.max() - ys.min())
+                if (dispersion <= MAX_DISPERSION) {
+                    val meanReliability = (i..j).map { samples[it].reliability.toDouble() }.average()
+                    events.add(
+                        FixationEvent(
+                            samples[i].tsMs, samples[j].tsMs, durationMs,
+                            xs.average(), ys.average(), meanReliability.coerceIn(0.0, 1.0),
+                        ),
+                    )
+                }
+            }
+            i = if (j > i) j + 1 else i + 1
+        }
+        return events
+    }
+}
+
 object BlinkDetector {
     private val BLINK_PHASES = setOf(BlinkState.CLOSING, BlinkState.CLOSED, BlinkState.OPENING)
 

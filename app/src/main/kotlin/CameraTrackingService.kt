@@ -410,6 +410,7 @@ class CameraTrackingService : LifecycleService() {
             )
         }
         for (event in SaccadeDetector.detect(saccadeSamples)) writer.appendSaccade(event)
+        for (event in FixationDetector.detect(saccadeSamples)) writer.appendFixation(event)
         val blinkSamples = samples.map { BlinkSample(it.tElapsedNanos / 1_000_000, it.leftBlink) }
         for (event in BlinkDetector.detect(blinkSamples)) writer.appendBlink(event)
         val file = writer.finalizeSession()

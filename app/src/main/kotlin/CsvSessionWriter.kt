@@ -84,6 +84,19 @@ class CsvSessionWriter(private val dir: File) {
         writeRow(w, row)
     }
 
+    /** Append a fixation as an `event` row with event_type=fixation (prompt 019); centroid in annotation. */
+    @Synchronized
+    fun appendFixation(event: FixationEvent) {
+        val w = writer ?: return
+        val row = emptyRow()
+        row[0] = (event.onsetMs * 1_000_000).toString()
+        row[4] = "event"; row[5] = trackingMode; row[6] = eyeMode
+        row[24] = "fixation"; row[25] = event.onsetMs.toString(); row[26] = event.offsetMs.toString()
+        row[27] = event.durationMs.toString(); row[30] = f(event.confidence)
+        row[33] = "centroid=${f(event.centroidX)};${f(event.centroidY)}"
+        writeRow(w, row)
+    }
+
     /** Append a user interaction marker as a `task` row (prompt 012); columns per the schema. */
     @Synchronized
     fun appendTask(label: String, note: String, tElapsedNanos: Long) {
