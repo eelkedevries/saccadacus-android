@@ -88,6 +88,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val session by SessionStats.state.collectAsState()
     val overlay by OverlayStats.state.collectAsState()
     val quality by QualityStats.state.collectAsState()
+    val summary by SummaryStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
@@ -285,6 +286,16 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Text("Saccades ${events.saccades} · Fixations ${events.fixations} · Blinks ${events.blinks} · ${events.headMotionLabel}")
         Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · ${session.markerCount} marks · sensors ${if (session.sensorsActive) "on" else "off"}")
         Text("Name: ${sessionName.ifBlank { "(unnamed — uses timestamp)" }}" + if (sessionNote.isNotBlank()) " · note: $sessionNote" else "")
+        summary?.let { s ->
+            if (!running) {
+                Spacer(Modifier.height(12.dp))
+                Text("Last session summary:")
+                Text("• Duration ${"%.0f".format(s.durationSec)} s · mean reliability ${"%.2f".format(s.meanReliability)} · loss ${"%.1f".format(s.trackingLossSec)} s")
+                Text("• Saccades ${s.saccades} (${s.saccadeRatePerMin.toInt()}/min) · mean amp ${"%.3f".format(s.meanSaccadeAmplitude)} · mean dur ${s.meanSaccadeDurationMs.toInt()} ms")
+                Text("• Fixations ${s.fixations} (${s.fixationRatePerMin.toInt()}/min) · mean dur ${s.meanFixationDurationMs.toInt()} ms")
+                Text("• Blinks ${s.blinks} (${s.blinkRatePerMin.toInt()}/min)")
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Text(
             when {

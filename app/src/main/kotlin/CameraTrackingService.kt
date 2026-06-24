@@ -124,6 +124,7 @@ class CameraTrackingService : LifecycleService() {
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
         eventAccumulator.reset()
+        SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
         getExternalFilesDir(null)?.let { dir ->
@@ -409,15 +410,81 @@ class CameraTrackingService : LifecycleService() {
                 s.leftBlink == BlinkState.CLOSED || s.leftBlink == BlinkState.CLOSING, true,
             )
         }
-        for (event in SaccadeDetector.detect(saccadeSamples)) writer.appendSaccade(event)
-        for (event in FixationDetector.detect(saccadeSamples)) writer.appendFixation(event)
+        val saccades = SaccadeDetector.detect(saccadeSamples)
+        val fixations = FixationDetector.detect(saccadeSamples)
         val blinkSamples = samples.map { BlinkSample(it.tElapsedNanos / 1_000_000, it.leftBlink) }
-        for (event in BlinkDetector.detect(blinkSamples)) writer.appendBlink(event)
+        val blinks = BlinkDetector.detect(blinkSamples)
+        for (event in saccades) writer.appendSaccade(event)
+        for (event in fixations) writer.appendFixation(event)
+        for (event in blinks) writer.appendBlink(event)
         val file = writer.finalizeSession()
         csvWriter = null
         Log.i(TAG, "Session CSV: ${file?.absolutePath}")
         writeSensorSidecar()
         writeMetaSidecar()
+        writeSummarySidecar(samples, saccades, fixations, blinks)
+    }
+
+    /** Compute per-session summary stats (prompt 020): publish to the UI and a summary sidecar. */
+    private fun writeSummarySidecar(
+        samples: List<SessionRecorder.Sample>,
+        saccades: List<SaccadeEvent>,
+        fixations: List<FixationEvent>,
+        blinks: List<BlinkEvent>,
+    ) {
+        try {
+            val durationMs = if (samples.size >= 2) {
+                (samples.last().tElapsedNanos - samples.first().tElapsedNanos) / 1_000_000
+            } else {
+                0L
+            }
+            val durationMin = durationMs / 60_000.0
+            fun rate(count: Int) = if (durationMin > 0) count / durationMin else 0.0
+            val lossMs = SessionRecorder.lossIntervals.sumOf { (it.endNanos - it.startNanos) / 1_000_000 }
+            val reliabilities = samples.map { it.faceReliability.toDouble() }.filter { !it.isNaN() }
+            val sacAmp = saccades.map { it.amplitude }
+            val sacDur = saccades.map { it.durationMs.toDouble() }
+            val fixDur = fixations.map { it.durationMs.toDouble() }
+            val stats = SessionSummaryStats(
+                durationSec = durationMs / 1000.0,
+                saccades = saccades.size, saccadeRatePerMin = rate(saccades.size),
+                meanSaccadeAmplitude = mean(sacAmp), medianSaccadeAmplitude = median(sacAmp),
+                meanSaccadeDurationMs = mean(sacDur), medianSaccadeDurationMs = median(sacDur),
+                fixations = fixations.size, fixationRatePerMin = rate(fixations.size),
+                meanFixationDurationMs = mean(fixDur),
+                blinks = blinks.size, blinkRatePerMin = rate(blinks.size),
+                meanReliability = mean(reliabilities), trackingLossSec = lossMs / 1000.0,
+            )
+            SummaryStats.update(stats)
+            File(getExternalFilesDir(null), "summary_$sessionStamp.csv").bufferedWriter().use { w ->
+                w.write("key,value"); w.newLine()
+                w.write("duration_sec,${fmt(stats.durationSec)}"); w.newLine()
+                w.write("saccades,${stats.saccades}"); w.newLine()
+                w.write("saccade_rate_per_min,${fmt(stats.saccadeRatePerMin)}"); w.newLine()
+                w.write("mean_saccade_amplitude,${fmt(stats.meanSaccadeAmplitude)}"); w.newLine()
+                w.write("median_saccade_amplitude,${fmt(stats.medianSaccadeAmplitude)}"); w.newLine()
+                w.write("mean_saccade_duration_ms,${fmt(stats.meanSaccadeDurationMs)}"); w.newLine()
+                w.write("median_saccade_duration_ms,${fmt(stats.medianSaccadeDurationMs)}"); w.newLine()
+                w.write("fixations,${stats.fixations}"); w.newLine()
+                w.write("fixation_rate_per_min,${fmt(stats.fixationRatePerMin)}"); w.newLine()
+                w.write("mean_fixation_duration_ms,${fmt(stats.meanFixationDurationMs)}"); w.newLine()
+                w.write("blinks,${stats.blinks}"); w.newLine()
+                w.write("blink_rate_per_min,${fmt(stats.blinkRatePerMin)}"); w.newLine()
+                w.write("mean_reliability,${fmt(stats.meanReliability)}"); w.newLine()
+                w.write("tracking_loss_sec,${fmt(stats.trackingLossSec)}"); w.newLine()
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "summary sidecar failed", t)
+        }
+    }
+
+    private fun mean(xs: List<Double>): Double = if (xs.isEmpty()) 0.0 else xs.average()
+
+    private fun median(xs: List<Double>): Double {
+        if (xs.isEmpty()) return 0.0
+        val s = xs.sorted()
+        val m = s.size / 2
+        return if (s.size % 2 == 1) s[m] else (s[m - 1] + s[m]) / 2.0
     }
 
     private fun writeMetaSidecar() {
