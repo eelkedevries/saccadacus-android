@@ -1,23 +1,41 @@
 # Current state
 
-Living, high-level orientation for the project: what exists now, key architectural decisions, and what is in progress. Read it at the start of a session to orient quickly.
-
-Update it only for genuinely useful orientation — a new system, an architectural decision — not after routine commits. A stale or bloated state file is worse than none.
-
-This file records what *is* (current reality). The binding design canon is `docs-dev/reference/primary_authoritative/`; when the two conflict, the canon wins and the gap is work still to be done.
+Living, high-level orientation: what exists now, key decisions, and what is in
+progress. Read it at session start. Records current reality; the binding canon is
+`docs-dev/reference/primary_authoritative/specification.md` (the canon wins on conflict).
 
 ## Systems
 
-_None yet — project initialised._
+- **Android scaffold only** — Kotlin + Jetpack Compose, single stub `MainActivity`,
+  committed Gradle wrapper, CI **Build APK** workflow. No camera, service, sensors, or
+  tracking code yet (manifest declares no permissions/services).
 
 ## Key decisions
 
-_None recorded yet._
+The stack and architecture are now settled (see `specification.md` §Locked decisions),
+from the Android-stack research:
+
+- Stack: **CameraX + MediaPipe Tasks Vision Face Landmarker + Kotlin pipeline + incremental
+  CSV**, all on-device with **no Google Play Services** dependency.
+- A **`camera` foreground service owns the camera + model**; tracking is user-initiated
+  while visible; the browser repo's **algorithms and data model** are ported (it has no
+  production tracker to lift).
+- **True pupil tracking deferred** (iris-centre only); raw video off by default.
+- Provisional, to confirm: `minSdk 29`, `applicationId com.saccadacus.android`.
+
+Supporting research (non-binding) lives in `docs-dev/planning/`:
+`android_stack_research_brief.md`, `saccadacus_phase0_audit.md`,
+`android_stack_research_report.md` (the latter's §19 is the staged implementation plan).
 
 ## In progress / next
 
-_Nothing in progress yet._
+- **Next: prompt `002_camera_fgs_poc.md`** — the risk-first proof-of-feasibility
+  (camera foreground service + CameraX front-camera frame logger). Its acceptance
+  criterion (frames survive screen-off/app-switch for 30–60 min on real Pixel + Samsung
+  devices) requires on-device testing by a human — CI only proves it builds.
+- Remaining stages 003–010 are proposed in the research report §19; each will be drafted
+  as a prompt when run.
 
 ## Prompts run
 
-_A running list of completed prompts, newest last. Add the prompt filename as each is run._
+- `001_setup.md` — initial scaffold confirmed.
