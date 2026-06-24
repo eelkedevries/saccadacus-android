@@ -45,9 +45,25 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   on-device benchmark (004) → eye/iris/head-pose adapter (005) → signals/events + parity
   tests (006) → session + sensors (007) → CSV export (008) → modes + quality UI (009) →
   optional raw video (010). **All of `003`–`010` are implemented and CI-green; the whole
-  v1 pipeline now exists. On-device behaviour (does tracking actually work; are the
-  eye-movement signs/mirroring correct) is the outstanding step — a device test, with the
-  `SignConvention` flags ready for one-line calibration if an axis is flipped.**
+  v1 pipeline now exists.**
+- **Post-010 fixes (on `main`, CI-green):** camera frames are now rotated upright before
+  MediaPipe inference (`FaceLandmarkerHelper`) — a device test had shown a constant
+  `head_roll ≈ -90°` from the frame being processed in raw sensor orientation, which also
+  scrambled the eye-corner projection; the fix took roll to ~0°. Also added a **"Save CSV
+  to Downloads"** action (MediaStore) so export no longer needs the share-sheet.
+- **On-device gaze precision is PARKED for a daylight retest.** Detection, the full
+  record→CSV→export pipeline, background survival, and the rotation fix are all confirmed
+  working on-device; the open question is iris-gaze precision, which two night-time
+  recordings showed as near-zero signal — most likely low light (MediaPipe iris collapses
+  toward the eye centre in poor light), not a code bug. The `SignConvention` /
+  `FaceMeshIndices` flags remain ready for one-line calibration once a good-light recording
+  exists; the overlay (prompt 015) is the tool that will make that retest immediate.
+- **New prompt queue `011`–`018` is drafted** (not yet run): notification pause/resume
+  (011) and interaction markers (012) complete the defined v1 controls; long-run survival
+  (013) and SDK/AGP version pinning (014) harden it; Tier-4 extras are the live face/iris
+  overlay (015), low-light/face-lost alert (016), sessions screen (017), and session
+  naming + notes (018). **Each carries a "Cross-prompt impact check"**: while running it,
+  the agent must adjust any later, not-yet-run prompt that new findings invalidate.
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
