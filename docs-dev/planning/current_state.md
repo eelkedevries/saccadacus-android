@@ -41,9 +41,12 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   Samsung/Xiaomi to check aggressive battery-killers. **Prompt 003 is unblocked.**
 - Debug APKs are published to the GitHub **Releases → latest** page on every push to
   `main` (one-tap sideload), in addition to the per-run Actions artifact.
-- Remaining stages 003–010 are proposed in the research report §19; each will be drafted
-  as a prompt when run. **Next up: 003** (MediaPipe Face Landmarker adapter, or the
-  permissions/quality scaffolding — to be drafted).
+- **Prompt queue `003`–`010` is drafted** in `docs-dev/agent/prompts/`: engine (003) →
+  on-device benchmark (004) → eye/iris/head-pose adapter (005) → signals/events + parity
+  tests (006) → session + sensors (007) → CSV export (008) → modes + quality UI (009) →
+  optional raw video (010). **Next: run `003`** (integrate MediaPipe Face Landmarker).
+- Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
+  the earlier feature-branch staging is retired.
 
 ## Prompts run
 
