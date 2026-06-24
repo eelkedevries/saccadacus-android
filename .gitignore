@@ -23,6 +23,9 @@ local.properties
 *.jks
 .cxx/
 
+# downloaded ML model assets (fetched at build time by Gradle, not committed)
+/app/src/main/assets/*.task
+
 # temporary internal material
 docs-dev/tmp/
 docs-dev/private/

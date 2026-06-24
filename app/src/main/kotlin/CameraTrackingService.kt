@@ -13,27 +13,27 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import java.io.BufferedWriter
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Proof-of-feasibility foreground service (prompts 002 / 002b).
- *
- * Owns the front camera via CameraX [ImageAnalysis] and, for each analysed frame,
- * appends `frameIndex, cameraSensorTimestamp, elapsedRealtimeNanos` to a CSV file in
- * the app's external files dir, and updates [TrackingStats] + the notification so
- * progress is visible without pulling the CSV. No tracking, no ML — this exists only
- * to test whether the OS keeps delivering front-camera frames after the user leaves.
+ * Foreground service that owns the front camera (prompts 002 / 002b) and the MediaPipe
+ * Face Landmarker (prompt 003). Per frame it logs frame timing to CSV and feeds the
+ * frame to MediaPipe; face landmarks / blink blendshapes are surfaced via [TrackingStats].
+ * No derived eye/iris/head signals yet — that is prompt 005.
  */
 class CameraTrackingService : LifecycleService() {
 
     private lateinit var analysisExecutor: ExecutorService
     private var cameraProvider: ProcessCameraProvider? = null
+    private var faceHelper: FaceLandmarkerHelper? = null
     private var logWriter: BufferedWriter? = null
     private var frameIndex = 0L
     private var lastNotifUpdateMs = 0L
+    private var lastMpTimestamp = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -55,6 +55,14 @@ class CameraTrackingService : LifecycleService() {
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         TrackingStats.onStart(SystemClock.elapsedRealtimeNanos())
         openLog()
+        // Model load is slow; build the landmarker off the main thread.
+        analysisExecutor.execute {
+            faceHelper = FaceLandmarkerHelper(
+                this,
+                onResult = ::handleFaceResult,
+                onError = { error -> Log.e(TAG, "MediaPipe: $error") },
+            )
+        }
         bindCamera()
     }
 
@@ -70,6 +78,7 @@ class CameraTrackingService : LifecycleService() {
             cameraProvider = provider
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
             analysis.setAnalyzer(analysisExecutor) { image ->
                 val elapsed = SystemClock.elapsedRealtimeNanos()
@@ -77,6 +86,11 @@ class CameraTrackingService : LifecycleService() {
                 logFrame(index, image.imageInfo.timestamp, elapsed)
                 TrackingStats.onFrame(elapsed)
                 maybeUpdateNotification(index + 1)
+                try {
+                    faceHelper?.detectAsync(image.toBitmap(), image.imageInfo.rotationDegrees, nextMpTimestamp())
+                } catch (t: Throwable) {
+                    Log.e(TAG, "face detect failed", t)
+                }
                 image.close()
             }
             try {
@@ -86,6 +100,31 @@ class CameraTrackingService : LifecycleService() {
                 Log.e(TAG, "bindToLifecycle failed", t)
             }
         }, mainExecutor)
+    }
+
+    /** MediaPipe LIVE_STREAM requires strictly increasing timestamps (ms). */
+    private fun nextMpTimestamp(): Long {
+        val now = SystemClock.uptimeMillis()
+        lastMpTimestamp = if (now > lastMpTimestamp) now else lastMpTimestamp + 1
+        return lastMpTimestamp
+    }
+
+    private fun handleFaceResult(result: FaceLandmarkerResult) {
+        val faces = result.faceLandmarks()
+        val detected = faces.isNotEmpty()
+        val landmarkCount = if (detected) faces[0].size else 0
+        var blinkLeft = 0f
+        var blinkRight = 0f
+        val blendshapes = result.faceBlendshapes()
+        if (blendshapes.isPresent && blendshapes.get().isNotEmpty()) {
+            for (category in blendshapes.get()[0]) {
+                when (category.categoryName()) {
+                    "eyeBlinkLeft" -> blinkLeft = category.score()
+                    "eyeBlinkRight" -> blinkRight = category.score()
+                }
+            }
+        }
+        TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
     }
 
     private fun openLog() {
@@ -146,6 +185,8 @@ class CameraTrackingService : LifecycleService() {
             Log.e(TAG, "unbind failed", t)
         }
         cameraProvider = null
+        faceHelper?.close()
+        faceHelper = null
         try {
             logWriter?.flush()
             logWriter?.close()

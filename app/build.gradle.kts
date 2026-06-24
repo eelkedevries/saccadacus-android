@@ -57,6 +57,29 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.lifecycle.service)
+    implementation(libs.mediapipe.tasks.vision)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+// Fetch the MediaPipe Face Landmarker model into assets at build time (prompt 003).
+// Downloaded, not committed (see .gitignore); CI fetches it on a fresh checkout.
+val faceLandmarkerModelUrl =
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+
+val downloadFaceLandmarkerModel = tasks.register("downloadFaceLandmarkerModel") {
+    val outFile = file("src/main/assets/face_landmarker.task")
+    outputs.file(outFile)
+    doLast {
+        if (!outFile.exists()) {
+            outFile.parentFile.mkdirs()
+            val tmp = java.io.File(outFile.parentFile, "face_landmarker.task.tmp")
+            uri(faceLandmarkerModelUrl).toURL().openStream().use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            }
+            check(tmp.renameTo(outFile)) { "Failed to move downloaded model into place" }
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(downloadFaceLandmarkerModel) }

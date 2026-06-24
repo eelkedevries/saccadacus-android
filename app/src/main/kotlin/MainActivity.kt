@@ -124,6 +124,8 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Text("Running: ${formatDuration(runningSecs)}")
         Text("Since last frame: ${formatSeconds(sinceLastSecs)} s")
         Text("Approx rate: ${fps.toInt()} fps")
+        Text("Face: " + if (snapshot.faceDetected) "detected (${snapshot.landmarkCount} landmarks)" else "not detected")
+        Text("Blink L/R: ${"%.2f".format(snapshot.blinkLeft)} / ${"%.2f".format(snapshot.blinkRight)}")
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
     }
