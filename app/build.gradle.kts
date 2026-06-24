@@ -73,7 +73,7 @@ val downloadFaceLandmarkerModel = tasks.register("downloadFaceLandmarkerModel") 
     doLast {
         if (!outFile.exists()) {
             outFile.parentFile.mkdirs()
-            val tmp = java.io.File(outFile.parentFile, "face_landmarker.task.tmp")
+            val tmp = outFile.parentFile.resolve("face_landmarker.task.tmp")
             uri(faceLandmarkerModelUrl).toURL().openStream().use { input ->
                 tmp.outputStream().use { output -> input.copyTo(output) }
             }
