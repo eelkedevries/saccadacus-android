@@ -20,13 +20,14 @@ class CsvSessionWriter(private val dir: File) {
     private var eyeMode = "binocular"
     private var wallAnchorMs = 0L
 
-    fun start(trackingMode: String, eyeMode: String, wallAnchorMs: Long) {
+    fun start(trackingMode: String, eyeMode: String, wallAnchorMs: Long, stamp: Long, name: String) {
         this.trackingMode = trackingMode
         this.eyeMode = eyeMode
         this.wallAnchorMs = wallAnchorMs
-        val stamp = System.currentTimeMillis()
-        finalFile = File(dir, "session_$stamp.csv")
-        tmpFile = File(dir, "session_$stamp.csv.tmp")
+        val safe = safeName(name)
+        val base = if (safe.isEmpty()) "session_$stamp" else "session_${stamp}_$safe"
+        finalFile = File(dir, "$base.csv")
+        tmpFile = File(dir, "$base.csv.tmp")
         try {
             writer = tmpFile!!.bufferedWriter().apply {
                 write(HEADER.joinToString(","))
@@ -129,6 +130,10 @@ class CsvSessionWriter(private val dir: File) {
 
     /** Keep free text on one CSV cell: no commas or newlines. */
     private fun csv(s: String): String = s.replace(',', ';').replace('\n', ' ').replace('\r', ' ')
+
+    /** Filesystem-safe session-name fragment for the filename: alphanumerics/dash only, capped. */
+    private fun safeName(name: String): String =
+        name.trim().replace(Regex("[^A-Za-z0-9-]+"), "_").trim('_').take(40)
 
     companion object {
         private const val TAG = "CsvSessionWriter"

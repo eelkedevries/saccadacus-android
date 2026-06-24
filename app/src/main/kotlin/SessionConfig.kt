@@ -18,4 +18,11 @@ object SessionConfig {
     /** Optional local raw-video recording (prompt 010). Off by default; explicit opt-in. */
     @Volatile
     var rawVideoEnabled: Boolean = false
+
+    /** Optional session name and free-text note (prompt 018); a blank name falls back to the timestamp. */
+    @Volatile
+    var sessionName: String = ""
+
+    @Volatile
+    var sessionNote: String = ""
 }

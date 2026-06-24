@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -92,6 +93,8 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
     var rawVideo by remember { mutableStateOf(SessionConfig.rawVideoEnabled) }
     var overlayEnabled by remember { mutableStateOf(OverlayConfig.enabled) }
+    var sessionName by remember { mutableStateOf(SessionConfig.sessionName) }
+    var sessionNote by remember { mutableStateOf(SessionConfig.sessionNote) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -170,6 +173,24 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             }
         }
         Text("Mode: $useCase · eyes $eyeMode")
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = sessionName,
+            onValueChange = { sessionName = it; SessionConfig.sessionName = it },
+            enabled = !running,
+            singleLine = true,
+            label = { Text("Session name (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = sessionNote,
+            onValueChange = { sessionNote = it; SessionConfig.sessionNote = it },
+            enabled = !running,
+            singleLine = true,
+            label = { Text("Note (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(8.dp))
         Button(
             enabled = !running,
@@ -263,6 +284,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         }
         Text("Saccades ${events.saccades} · Blinks ${events.blinks} · ${events.headMotionLabel}")
         Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · ${session.markerCount} marks · sensors ${if (session.sensorsActive) "on" else "off"}")
+        Text("Name: ${sessionName.ifBlank { "(unnamed — uses timestamp)" }}" + if (sessionNote.isNotBlank()) " · note: $sessionNote" else "")
         Spacer(Modifier.height(12.dp))
         Text(
             when {
@@ -342,8 +364,10 @@ fun SessionsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
         }
         sessions.forEach { file ->
             Spacer(Modifier.height(12.dp))
-            Text(file.name)
-            Text("${file.length() / 1024} kB · ${formatStamp(file.lastModified())}")
+            val meta = sessionMeta(file)
+            Text(meta["session_name"]?.takeIf { it.isNotBlank() } ?: "(unnamed)")
+            meta["session_note"]?.takeIf { it.isNotBlank() }?.let { Text("note: $it") }
+            Text("${file.name} · ${file.length() / 1024} kB · ${formatStamp(file.lastModified())}")
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { saveFileToDownloads(context, file) }) { Text("Save") }
@@ -462,6 +486,22 @@ private fun listSessionCsvs(context: Context): List<File> {
 
 private fun formatStamp(epochMs: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.UK).format(Date(epochMs))
+
+/** Read a session's meta_<stamp>.csv sidecar (prompt 018) into key→value pairs; empty if absent. */
+private fun sessionMeta(file: File): Map<String, String> {
+    val stamp = file.name.removePrefix("session_").takeWhile { it.isDigit() }
+    if (stamp.isEmpty()) return emptyMap()
+    val meta = File(file.parentFile, "meta_$stamp.csv")
+    if (!meta.exists()) return emptyMap()
+    return try {
+        meta.readLines().drop(1).mapNotNull { line ->
+            val idx = line.indexOf(',')
+            if (idx <= 0) null else line.substring(0, idx) to line.substring(idx + 1)
+        }.toMap()
+    } catch (t: Throwable) {
+        emptyMap()
+    }
+}
 
 private fun shareLatestSession(context: Context) {
     val csv = latestSessionCsv(context) ?: return

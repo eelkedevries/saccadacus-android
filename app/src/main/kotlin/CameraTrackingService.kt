@@ -87,6 +87,9 @@ class CameraTrackingService : LifecycleService() {
     private var csvWriter: CsvSessionWriter? = null
     @Volatile private var lastCameraSensorTs = 0L
 
+    // Naming (018): one stamp links session_<stamp>.csv with its meta_<stamp>.csv sidecar.
+    @Volatile private var sessionStamp = 0L
+
     // Raw video (010)
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
@@ -116,6 +119,7 @@ class CameraTrackingService : LifecycleService() {
         lastReacquireMs = 0L
         lastOverlayMs = 0L
         lumaEma = 0.0
+        sessionStamp = System.currentTimeMillis()
         profile = ProbeConfig.selected
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
@@ -123,7 +127,9 @@ class CameraTrackingService : LifecycleService() {
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
         getExternalFilesDir(null)?.let { dir ->
-            csvWriter = CsvSessionWriter(dir).apply { start("iris", SessionConfig.eyeMode, System.currentTimeMillis()) }
+            csvWriter = CsvSessionWriter(dir).apply {
+                start("iris", SessionConfig.eyeMode, System.currentTimeMillis(), sessionStamp, SessionConfig.sessionName)
+            }
         }
         createChannel()
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
@@ -415,10 +421,12 @@ class CameraTrackingService : LifecycleService() {
 
     private fun writeMetaSidecar() {
         try {
-            val file = File(getExternalFilesDir(null), "meta_${System.currentTimeMillis()}.csv")
+            val file = File(getExternalFilesDir(null), "meta_$sessionStamp.csv")
             file.bufferedWriter().use { w ->
                 w.write("key,value"); w.newLine()
                 w.write("profile,${SessionRecorder.profileName}"); w.newLine()
+                w.write("session_name,${SessionConfig.sessionName}"); w.newLine()
+                w.write("session_note,${SessionConfig.sessionNote.replace('\n', ' ').replace('\r', ' ')}"); w.newLine()
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
