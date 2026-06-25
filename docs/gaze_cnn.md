@@ -12,8 +12,9 @@ download.
 
 ## Model contract
 
-- **File:** `gaze_model.tflite`, placed in the app's external files dir
-  (`/Android/data/com.saccadacus.android/files/gaze_model.tflite`).
+- **Location:** put one or more `*.tflite` files in the `gaze_models/` folder of the app's external
+  files dir (`/Android/data/com.saccadacus.android/files/gaze_models/`). A single
+  `gaze_model.tflite` in the parent folder is still honoured too.
 - **Input:** `[1, 36, 60, 1]` float32 — a normalised single-eye patch, grayscale, values in
   `[0, 1]` (H = 36, W = 60). The app runs it per eye.
 - **Output:** `[1, 2]` float32 = `(pitch, yaw)` in radians. The two eyes are averaged and the
@@ -24,26 +25,26 @@ A small MPIIGaze-style normalised-eye CNN matches this contract; train it on com
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head
 pose the app already extracts from the MediaPipe landmarks).
 
-## How to side-load a model
+## How to side-load models
 
-Place your `gaze_model.tflite` at the path above — e.g. over USB:
+Push one or more models into the `gaze_models/` folder — e.g. over USB:
 
 ```
-adb push gaze_model.tflite /sdcard/Android/data/com.saccadacus.android/files/gaze_model.tflite
+adb push mpiigaze.tflite  /sdcard/Android/data/com.saccadacus.android/files/gaze_models/
+adb push blazegaze.tflite /sdcard/Android/data/com.saccadacus.android/files/gaze_models/
 ```
 
-(or copy it there with a file manager). The model loads at session start; if it is absent the CNN
-source simply falls back to iris.
+(or copy them there with a file manager). The selected model loads at session start; if none is
+present the CNN source simply falls back to iris.
 
-## Selecting it and comparing accuracy (A/B)
+## Selecting a model and comparing (A/B/C)
 
-Tap **Gaze source** to cycle iris → blendshape → cnn. With a model loaded, the CNN drives the gaze.
-To compare it against iris:
+Tap **Gaze source** to cycle iris → blendshape → cnn. When the source is **cnn**, a **Model: …**
+button appears that cycles through the side-loaded models. To compare models (and against iris):
 
-1. Calibrate on **iris** and note the on-screen **"Mean check error"** (also `calibration_error`
-   in `meta_<stamp>.csv`).
-2. Switch to **cnn**, calibrate again, and compare. Lower is better.
+1. Calibrate and note the on-screen **"Mean check error"** (also `calibration_error` in
+   `meta_<stamp>.csv`); the CNN inference latency (mean / p50 / p95 ms) is in `benchmark_<stamp>.csv`.
+2. Switch model (or source) and calibrate again. Each recording's `meta_<stamp>.csv` records the
+   active `signal_source` and `gaze_model`, so you can line up accuracy *and* latency per model.
 
-The CNN's inference latency (mean / p50 / p95 ms) is written to `benchmark_<stamp>.csv` while the
-CNN source is active, so you can confirm it fits your frame budget on your device. The active
-source is recorded as `signal_source` (meta) and `tracking_mode` (combined CSV).
+Lower check-error is better. The active source is also recorded as `tracking_mode` in the combined CSV.

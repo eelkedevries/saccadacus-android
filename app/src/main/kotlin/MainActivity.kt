@@ -123,6 +123,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var sessionNote by remember { mutableStateOf(SessionConfig.sessionNote) }
     var filterEnabled by remember { mutableStateOf(SessionConfig.filterEnabled) }
     var signalSource by remember { mutableStateOf(SessionConfig.signalSource) }
+    var gazeModel by remember { mutableStateOf(SessionConfig.gazeModelName) }
     var showRationale by remember { mutableStateOf(false) }
     val requiredPermissions = remember {
         buildList {
@@ -220,6 +221,29 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 SessionConfig.signalSource = signalSource
             },
         ) { Text("Gaze source: $signalSource (tap to switch)") }
+        if (signalSource == SessionConfig.SOURCE_CNN) {
+            val models = remember(signalSource, running) { GazeCnn.availableModels(context) }
+            Button(
+                enabled = !running && models.isNotEmpty(),
+                onClick = {
+                    if (models.isNotEmpty()) {
+                        val cur = models.indexOf(gazeModel)
+                        gazeModel = models[(cur + 1).mod(models.size)]
+                        SessionConfig.gazeModelName = gazeModel
+                        AppSettings.save(context)
+                    }
+                },
+            ) {
+                Text(
+                    if (models.isEmpty()) {
+                        "No CNN models found — side-load a .tflite"
+                    } else {
+                        "Model: ${gazeModel.ifEmpty { models.first() }} (tap to switch)"
+                    },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = sessionName,

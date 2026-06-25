@@ -17,6 +17,10 @@ object SessionConfig {
     @Volatile
     var signalSource: String = SOURCE_IRIS
 
+    // Selected side-loaded CNN model filename (prompt 044); empty = first available.
+    @Volatile
+    var gazeModelName: String = ""
+
     @Volatile
     var useCaseMode: String = useCaseModes.first()
 

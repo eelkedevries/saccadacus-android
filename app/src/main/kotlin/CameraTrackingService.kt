@@ -144,7 +144,7 @@ class CameraTrackingService : LifecycleService() {
         eventAccumulator.reset()
         eyeFilter.reset()
         gazeSmoother.reset()
-        GazeCnn.load(this) // load the side-loaded CNN if present (no-op otherwise); refreshes each session
+        GazeCnn.load(this, SessionConfig.gazeModelName) // load the selected side-loaded CNN if present (no-op otherwise)
         cnnLatenciesMs.clear()
         SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
@@ -582,6 +582,7 @@ class CameraTrackingService : LifecycleService() {
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
                 w.write("signal_source,${SessionConfig.signalSource}"); w.newLine()
+                w.write("gaze_model,${GazeCnn.activeModel}"); w.newLine()
                 w.write("calibrated,${CalibrationStore.state.value != null}"); w.newLine()
                 w.write("calibration_error,${CalibrationStore.error.value ?: ""}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()

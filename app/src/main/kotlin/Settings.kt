@@ -30,6 +30,7 @@ object AppSettings {
     private val SESSION_NAME = stringPreferencesKey("session_name")
     private val SESSION_NOTE = stringPreferencesKey("session_note")
     private val SIGNAL_SOURCE = stringPreferencesKey("signal_source")
+    private val GAZE_MODEL = stringPreferencesKey("gaze_model_name")
     private val CALIBRATION = stringPreferencesKey("calibration")
     private val FIRST_RUN_DONE = booleanPreferencesKey("first_run_done")
 
@@ -47,6 +48,7 @@ object AppSettings {
         prefs[OVERLAY]?.let { OverlayConfig.enabled = it }
         prefs[FILTER]?.let { SessionConfig.filterEnabled = it }
         prefs[SIGNAL_SOURCE]?.let { SessionConfig.signalSource = it }
+        prefs[GAZE_MODEL]?.let { SessionConfig.gazeModelName = it }
         prefs[CALIBRATION]?.let { CalibrationStore.set(CalibrationModel.deserialize(it)) }
         prefs[SESSION_NAME]?.let { SessionConfig.sessionName = it }
         prefs[SESSION_NOTE]?.let { SessionConfig.sessionNote = it }
@@ -64,6 +66,7 @@ object AppSettings {
                     p[OVERLAY] = OverlayConfig.enabled
                     p[FILTER] = SessionConfig.filterEnabled
                     p[SIGNAL_SOURCE] = SessionConfig.signalSource
+                    p[GAZE_MODEL] = SessionConfig.gazeModelName
                     val cal = CalibrationStore.state.value
                     if (cal != null) p[CALIBRATION] = cal.serialize() else p.remove(CALIBRATION)
                     p[SESSION_NAME] = SessionConfig.sessionName
