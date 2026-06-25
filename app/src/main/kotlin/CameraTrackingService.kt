@@ -77,6 +77,9 @@ class CameraTrackingService : LifecycleService() {
     // Optional eye-local smoothing (021); no-op unless SessionConfig.filterEnabled.
     private val eyeFilter = EyeLocalFilter()
 
+    // One-Euro smoothing of the gaze that feeds the point-of-gaze (037); always on.
+    private val gazeSmoother = GazeSmoother()
+
     // Session (007)
     private var motionSensors: MotionSensors? = null
 
@@ -137,6 +140,7 @@ class CameraTrackingService : LifecycleService() {
         BenchmarkStats.reset(profile.name)
         eventAccumulator.reset()
         eyeFilter.reset()
+        gazeSmoother.reset()
         SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
@@ -304,8 +308,10 @@ class CameraTrackingService : LifecycleService() {
         eventAccumulator.onResult(frame, result.timestampMs())
         val tNanos = SystemClock.elapsedRealtimeNanos()
         SessionRecorder.addSample(frame, tNanos)
+        val gaze = binocularGaze(frame)?.let { (gx, gy) -> gazeSmoother.filter(gx, gy, tNanos) }
+            ?: run { gazeSmoother.reset(); null }
         val pog = CalibrationStore.state.value?.let { cal ->
-            binocularGaze(frame)?.let { (gx, gy) -> cal.map(gx, gy) }
+            gaze?.let { (gx, gy) -> cal.map(gx, gy) }
         }
         GazeStats.update(pog)
         csvWriter?.appendSample(frame, tNanos, lastCameraSensorTs, "unknown", pog?.first, pog?.second)
