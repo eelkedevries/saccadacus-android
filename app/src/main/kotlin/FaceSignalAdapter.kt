@@ -12,9 +12,12 @@ import kotlin.math.atan2
  */
 object FaceSignalAdapter {
 
+    private val blinkClassifier = BlinkClassifier()
+
     fun toResult(result: FaceLandmarkerResult): TrackingFrameResult {
         val faces = result.faceLandmarks()
         if (faces.isEmpty()) {
+            blinkClassifier.reset()
             return TrackingFrameResult(false, 0f, null, null, null)
         }
         val landmarks = faces[0]
@@ -42,27 +45,32 @@ object FaceSignalAdapter {
             }
         }
 
+        // Per-eye blink state, adaptive to each eye's open baseline (prompt 034). The pairing of
+        // eyeBlinkLeft/Right to the participant eyes is preserved from the score-based version.
+        val blinkStateLeft = blinkClassifier.classifyLeft(blinkLeft)
+        val blinkStateRight = blinkClassifier.classifyRight(blinkRight)
+
         val participantLeft: EyeFeature?
         val participantRight: EyeFeature?
         if (SessionConfig.signalSource == SessionConfig.SOURCE_BLENDSHAPE) {
             // Anatomical, participant frame: +x = participant's right, +y = up. For the left
             // eye, nasal (in) = toward participant-right; for the right eye, temporal (out) = right.
-            participantLeft = EyeFeature(lookInL - lookOutL, lookUpL - lookDownL, 1f, blinkState(blinkLeft))
-            participantRight = EyeFeature(lookOutR - lookInR, lookUpR - lookDownR, 1f, blinkState(blinkRight))
+            participantLeft = EyeFeature(lookInL - lookOutL, lookUpL - lookDownL, 1f, blinkStateLeft)
+            participantRight = EyeFeature(lookOutR - lookInR, lookUpR - lookDownR, 1f, blinkStateRight)
         } else {
             val imgLeftEye = eyeFeature(
                 landmarks,
                 FaceMeshIndices.IMG_LEFT_EYE_CORNER_OUTER,
                 FaceMeshIndices.IMG_LEFT_EYE_CORNER_INNER,
                 FaceMeshIndices.IMG_LEFT_IRIS_CENTRE,
-                blinkLeft,
+                blinkStateLeft,
             )
             val imgRightEye = eyeFeature(
                 landmarks,
                 FaceMeshIndices.IMG_RIGHT_EYE_CORNER_INNER,
                 FaceMeshIndices.IMG_RIGHT_EYE_CORNER_OUTER,
                 FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE,
-                blinkRight,
+                blinkStateRight,
             )
             // Under a mirrored front camera, the image-left eye is the participant's right eye.
             participantLeft = if (SignConvention.MIRROR_X) imgRightEye else imgLeftEye
@@ -77,7 +85,7 @@ object FaceSignalAdapter {
         cornerAIndex: Int,
         cornerBIndex: Int,
         irisIndex: Int,
-        blinkScore: Float,
+        blinkState: BlinkState,
     ): EyeFeature? {
         if (irisIndex >= landmarks.size) return null
         val a = participantPoint(landmarks[cornerAIndex])
@@ -86,19 +94,13 @@ object FaceSignalAdapter {
         // Order so leftCorner is participant-left (smaller x), rightCorner participant-right.
         val corners = if (a.x <= b.x) EyeCorners(a, b) else EyeCorners(b, a)
         val local = projectEyeLocal(corners, iris)
-        return EyeFeature(local.xLocal, local.yLocal, 1f, blinkState(blinkScore))
+        return EyeFeature(local.xLocal, local.yLocal, 1f, blinkState)
     }
 
     private fun participantPoint(landmark: NormalizedLandmark): Point2D {
         val x = if (SignConvention.MIRROR_X) 1f - landmark.x() else landmark.x()
         val y = if (SignConvention.FLIP_Y) 1f - landmark.y() else landmark.y()
         return Point2D(x, y)
-    }
-
-    private fun blinkState(score: Float): BlinkState = when {
-        score >= 0.5f -> BlinkState.CLOSED
-        score >= 0.2f -> BlinkState.CLOSING
-        else -> BlinkState.OPEN
     }
 
     /** Approximate yaw/pitch/roll from the 4x4 (row-major) facial transformation matrix. */
