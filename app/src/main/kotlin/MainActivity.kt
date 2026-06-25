@@ -325,7 +325,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             enabled = !running,
             onClick = { saveLatestSessionToDownloads(context) },
         ) {
-            Text("Save CSV to Downloads")
+            Text("Save session to Downloads")
         }
         Spacer(Modifier.height(12.dp))
         Button(
@@ -589,7 +589,7 @@ fun SessionsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             Text("${file.name} · ${file.length() / 1024} kB · ${formatStamp(file.lastModified())}")
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { saveFileToDownloads(context, file) }) { Text("Save") }
+                Button(onClick = { saveSessionToDownloads(context, file) }) { Text("Save") }
                 Button(onClick = { shareFile(context, file) }) { Text("Share") }
                 Button(onClick = { pendingDelete = file }) { Text("Delete") }
             }
@@ -772,29 +772,61 @@ private fun saveLatestSessionToDownloads(context: Context) {
         Toast.makeText(context, "No session CSV yet — record and stop a session first.", Toast.LENGTH_LONG).show()
         return
     }
-    saveFileToDownloads(context, csv)
+    saveSessionToDownloads(context, csv)
 }
 
-private fun saveFileToDownloads(context: Context, csv: File) {
+/**
+ * All files belonging to a session: the combined CSV plus every sidecar sharing its `<stamp>`
+ * (meta / summary / sensors, and benchmark / frame-log / raw video when present). The stamp is a
+ * unique millisecond value, so a `contains` match cannot pull in another session's files.
+ */
+private fun sessionBundle(csv: File): List<File> {
+    val stamp = csv.name.removePrefix("session_").takeWhile { it.isDigit() }
+    val dir = csv.parentFile
+    if (stamp.isEmpty() || dir == null) return listOf(csv)
+    val companions = dir.listFiles()
+        ?.filter { it.isFile && it != csv && it.name.contains(stamp) }
+        ?.sortedBy { it.name }
+        ?: emptyList()
+    return listOf(csv) + companions
+}
+
+/** Copy a session and all its sidecars into public Downloads, with one summary toast. */
+private fun saveSessionToDownloads(context: Context, csv: File) {
+    val files = sessionBundle(csv)
+    val saved = files.count { saveFileToDownloads(context, it) }
+    val msg = if (saved == files.size) {
+        "Saved $saved file(s) to Downloads (session + sidecars)."
+    } else {
+        "Saved $saved of ${files.size} file(s) to Downloads."
+    }
+    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+}
+
+/** Copy a single file into public Downloads; returns true on success. MIME from the extension. */
+private fun saveFileToDownloads(context: Context, file: File): Boolean {
     val resolver = context.contentResolver
+    val mime = when (file.extension.lowercase(Locale.UK)) {
+        "csv" -> "text/csv"
+        "mp4" -> "video/mp4"
+        "txt" -> "text/plain"
+        else -> "application/octet-stream"
+    }
     val pending = ContentValues().apply {
-        put(MediaStore.Downloads.DISPLAY_NAME, csv.name)
-        put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+        put(MediaStore.Downloads.DISPLAY_NAME, file.name)
+        put(MediaStore.Downloads.MIME_TYPE, mime)
         put(MediaStore.Downloads.IS_PENDING, 1)
     }
     val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-    val uri = resolver.insert(collection, pending) ?: run {
-        Toast.makeText(context, "Could not save to Downloads.", Toast.LENGTH_LONG).show()
-        return
-    }
-    try {
+    val uri = resolver.insert(collection, pending) ?: return false
+    return try {
         resolver.openOutputStream(uri)?.use { output ->
-            csv.inputStream().use { input -> input.copyTo(output) }
+            file.inputStream().use { input -> input.copyTo(output) }
         } ?: error("could not open Downloads file for writing")
         resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
-        Toast.makeText(context, "Saved to Downloads: ${csv.name}", Toast.LENGTH_LONG).show()
+        true
     } catch (e: Exception) {
         resolver.delete(uri, null, null)
-        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
+        false
     }
 }

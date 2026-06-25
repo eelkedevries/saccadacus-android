@@ -41,11 +41,13 @@ the tracked face mesh with the iris highlighted, so you can see tracking in real
 
 ## Getting your data out
 
-- **Save CSV to Downloads** — drops the latest session's CSV straight into your phone's
-  **Downloads** folder (open the Files app, or copy it off over USB). No share sheet needed.
-- **Share session CSV** — sends it via the Android share sheet (email, Drive, …).
+- **Save session to Downloads** — drops the latest session's **whole bundle** into your phone's
+  **Downloads** folder: the combined CSV plus its sidecars (`meta` with the calibration
+  accuracy, `summary`, `sensors`, and any benchmark / frame-log / raw video). All files share
+  the session's stamp. Open the Files app, or copy them off over USB. No share sheet needed.
+- **Share session CSV** — sends the combined CSV via the Android share sheet (email, Drive, …).
 - **Sessions** — lists every saved session with its name, note, size and date; from there you
-  can Save-to-Downloads, Share, or Delete each one.
+  can Save the bundle to Downloads, Share, or Delete each one.
 
 If the app is ever killed mid-session, the partial recording is recovered automatically on the
 next launch and appears in the Sessions list.

@@ -1,8 +1,9 @@
 # Data format
 
 A session produces one **combined CSV** plus a few **sidecar** files, all in the app's
-private external files directory (and exported to Downloads on request). Numbers use a
-locale-independent format (`.` decimal separator, fixed decimals).
+private external files directory. Saving a session to Downloads exports the whole set together
+(the combined CSV and every sidecar sharing its stamp). Numbers use a locale-independent format
+(`.` decimal separator, fixed decimals).
 
 ## Clock
 
@@ -66,5 +67,7 @@ only). Raw video is never written unless explicitly enabled.
 - **`benchmark_<stamp>.csv`** — on-device inference benchmark (fps, latency percentiles).
 - **`frame_log_<stamp>.csv`** — raw per-frame timing (`frame_index, camera_sensor_timestamp,
   elapsed_realtime_nanos`).
+- **`video_<stamp>.mp4`** — raw front-camera video, only when explicitly enabled (off by default).
 
-The `<stamp>` links a session CSV to its sidecars.
+Every file from one session shares the same `<stamp>`, so the combined CSV and its sidecars
+travel together when you save the session to Downloads.

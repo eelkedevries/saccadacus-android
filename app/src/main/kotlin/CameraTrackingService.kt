@@ -257,7 +257,7 @@ class CameraTrackingService : LifecycleService() {
         if (recording != null) return // re-acquire (013) must not spawn a second recording
         try {
             val dir = getExternalFilesDir(null) ?: return
-            val file = File(dir, "video_${System.currentTimeMillis()}.mp4")
+            val file = File(dir, "video_$sessionStamp.mp4")
             videoPath = file.absolutePath
             recording = capture.output
                 .prepareRecording(this, FileOutputOptions.Builder(file).build())
@@ -401,7 +401,7 @@ class CameraTrackingService : LifecycleService() {
         try {
             publishBenchmark()
             val snap = BenchmarkStats.state.value
-            val file = File(getExternalFilesDir(null), "benchmark_${System.currentTimeMillis()}.csv")
+            val file = File(getExternalFilesDir(null), "benchmark_$sessionStamp.csv")
             file.bufferedWriter().use { w ->
                 w.write("profile,analysed_frames,dropped_frames,analysed_fps,latency_mean_ms,latency_p50_ms,latency_p95_ms")
                 w.newLine()
@@ -554,7 +554,7 @@ class CameraTrackingService : LifecycleService() {
         val sensors = SessionRecorder.sensorSamples.toList()
         if (sensors.isEmpty()) return
         try {
-            val file = File(getExternalFilesDir(null), "sensors_${System.currentTimeMillis()}.csv")
+            val file = File(getExternalFilesDir(null), "sensors_$sessionStamp.csv")
             file.bufferedWriter().use { w ->
                 w.write("sensor,timestamp_nanos,v0,v1,v2")
                 w.newLine()
@@ -570,7 +570,7 @@ class CameraTrackingService : LifecycleService() {
 
     private fun openLog() {
         try {
-            val file = File(getExternalFilesDir(null), "frame_log_${System.currentTimeMillis()}.csv")
+            val file = File(getExternalFilesDir(null), "frame_log_$sessionStamp.csv")
             logWriter = file.bufferedWriter().apply {
                 write("frame_index,camera_sensor_timestamp,elapsed_realtime_nanos")
                 newLine()
