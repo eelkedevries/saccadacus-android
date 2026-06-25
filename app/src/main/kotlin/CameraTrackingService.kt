@@ -300,6 +300,39 @@ class CameraTrackingService : LifecycleService() {
         return frame.copy(leftEye = left, rightEye = right)
     }
 
+    /** Override gaze with a WebEyeTrack model's binocular point-of-gaze (prompt 049). */
+    private fun applyWebEyeTrackGaze(
+        frame: TrackingFrameResult,
+        result: FaceLandmarkerResult,
+        bitmap: Bitmap,
+    ): TrackingFrameResult {
+        val landmarks = result.faceLandmarks().firstOrNull() ?: return frame
+        val hp = frame.headPose ?: return frame
+        val n = landmarks.size
+        if (n < 468) return frame // need the full face mesh for the eye-region warp + corners
+        val xs = FloatArray(n) { landmarks[it].x() }
+        val ys = FloatArray(n) { landmarks[it].y() }
+        val t0 = SystemClock.elapsedRealtimeNanos()
+        val strip = WebEyeTrackPreprocessor.eyeStrip(bitmap, xs, ys) ?: return frame
+        val headVec = WebEyeTrackGeometry.headVector(
+            Math.toRadians(hp.yawDeg.toDouble()).toFloat(),
+            Math.toRadians(hp.pitchDeg.toDouble()).toFloat(),
+        )
+        // Eye centres = midpoints of the eye corners (right: 33/133, left: 362/263).
+        val rxc = (xs[33] + xs[133]) * 0.5f
+        val ryc = (ys[33] + ys[133]) * 0.5f
+        val lxc = (xs[362] + xs[263]) * 0.5f
+        val lyc = (ys[362] + ys[263]) * 0.5f
+        val origin = WebEyeTrackGeometry.faceOrigin3d(lxc, lyc, rxc, ryc, bitmap.width, bitmap.height)
+        val pog = GazeCnn.inferMulti(listOf(strip, headVec, origin)) ?: return frame
+        cnnLatenciesMs.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000.0)
+        // WebEyeTrack emits one binocular PoG in [-0.5,0.5]; set both eyes so binocularGaze == PoG,
+        // and the existing calibration maps it to the screen (standing in for the model's MAML head).
+        val left = frame.leftEye?.copy(irisXLocal = pog[0], irisYLocal = pog[1])
+        val right = frame.rightEye?.copy(irisXLocal = pog[0], irisYLocal = pog[1])
+        return frame.copy(leftEye = left, rightEye = right)
+    }
+
     private fun handleFaceResult(result: FaceLandmarkerResult, bitmap: Bitmap) {
         val submitNanos = submitTimesNanos.remove(result.timestampMs())
         if (submitNanos != null) {
@@ -325,10 +358,12 @@ class CameraTrackingService : LifecycleService() {
         maybePublishOverlay(faces, detected)
         publishQuality(detected)
         var frame = eyeFilter.process(FaceSignalAdapter.toResult(result))
-        if (SessionConfig.signalSource == SessionConfig.SOURCE_CNN && GazeCnn.isAvailable &&
-            GazeCnn.activeProfile == GazeModelProfile.EYE_GRAY
-        ) {
-            frame = applyCnnGaze(frame, result, bitmap)
+        if (SessionConfig.signalSource == SessionConfig.SOURCE_CNN && GazeCnn.isAvailable) {
+            frame = when (GazeCnn.activeProfile) {
+                GazeModelProfile.EYE_GRAY -> applyCnnGaze(frame, result, bitmap)
+                GazeModelProfile.WEB_EYE_TRACK -> applyWebEyeTrackGaze(frame, result, bitmap)
+                else -> frame
+            }
         }
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())

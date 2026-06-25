@@ -24,9 +24,32 @@ download.
   scale/convention).
 
 The app **auto-detects a model's input profile** from its input tensor shapes at load (prompt 048). The
-supported profile today is **EYE_GRAY** (the single `[1,36,60,1]` patch above); the CNN source only runs
-a model whose profile it recognises, otherwise it falls back to iris. Further profiles (multi-input
-models) are added as they are wired in.
+supported profiles are **EYE_GRAY** (the single `[1,36,60,1]` patch above) and **WEB_EYE_TRACK** (below);
+the CNN source only runs a model whose profile it recognises, otherwise it falls back to iris. Further
+profiles (multi-input models) are added as they are wired in.
+
+### WebEyeTrack / BlazeGaze profile (multi-input)
+
+`WEB_EYE_TRACK` — RedForestAI's MIT-licensed BlazeGaze (arXiv:2508.19544). Detected when the model has
+**three inputs**: `image` `[1,128,512,3]` (RGB both-eyes strip, ÷255), `head_vector` `[1,3]` (unit head
+direction), `face_origin_3d` `[1,3]` (eye origin in cm). Output `[1,2]` is a **point-of-gaze in
+normalised screen `[-0.5,0.5]`**, fed through the app's calibration (which stands in for the model's
+few-shot MAML personalisation). The app reproduces the eye-strip homography warp, the head vector, and a
+best-effort metric origin from the MediaPipe landmarks + head pose.
+
+**Convert to TFLite** (no weights are committed — supply your own; BlazeGaze's weights are
+MPIIFaceGaze-trained, research-only):
+
+```python
+# from the WebEyeTrack repo: python/webeyetrack/model_weights/blazegaze_mpiifacegaze.keras
+import tensorflow as tf
+m = tf.keras.models.load_model("blazegaze_mpiifacegaze.keras", compile=False)
+open("webeyetrack.tflite", "wb").write(tf.lite.TFLiteConverter.from_keras_model(m).convert())
+# keep the input order [image, head_vector, face_origin_3d]; push the file to gaze_models/
+```
+
+Caveats: the `head_vector` Euler source and the `face_origin_3d` reconstruction are approximate (we lack
+true camera intrinsics and the full metric face mesh) — verify on-device via the calibration error.
 
 A small MPIIGaze-style normalised-eye CNN matches this contract; train it on commercially-clean or
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head

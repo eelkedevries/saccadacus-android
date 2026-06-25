@@ -105,6 +105,29 @@ object GazeCnn {
         }
     }
 
+    /**
+     * Run a multi-input model (prompt 049): the [inputs] flat float buffers are fed in input-tensor
+     * order; returns the `[1,2]` output as a 2-float array, or null when no model is loaded / it fails.
+     */
+    fun inferMulti(inputs: List<FloatArray>): FloatArray? {
+        val itp = interpreter ?: return null
+        return try {
+            val arr = Array<Any>(inputs.size) { i ->
+                val a = inputs[i]
+                val b = ByteBuffer.allocateDirect(a.size * 4).order(ByteOrder.nativeOrder())
+                for (v in a) b.putFloat(v)
+                b.rewind()
+                b
+            }
+            val out = Array(1) { FloatArray(2) }
+            val outputs: MutableMap<Int, Any> = mutableMapOf(0 to out)
+            itp.runForMultipleInputsOutputs(arr, outputs)
+            floatArrayOf(out[0][0], out[0][1])
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     private fun mapFile(file: File): MappedByteBuffer =
         FileInputStream(file).channel.use { it.map(FileChannel.MapMode.READ_ONLY, 0, it.size()) }
 }

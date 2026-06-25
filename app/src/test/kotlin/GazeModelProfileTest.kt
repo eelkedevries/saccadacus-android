@@ -25,6 +25,16 @@ class GazeModelProfileTest {
     }
 
     @Test
+    fun detectsWebEyeTrack() {
+        assertEquals(
+            GazeModelProfile.WEB_EYE_TRACK,
+            GazeModelProfiles.detect(
+                listOf(intArrayOf(1, 128, 512, 3), intArrayOf(1, 3), intArrayOf(1, 3)),
+            ),
+        )
+    }
+
+    @Test
     fun rejectsUnknownShapes() {
         assertNull(GazeModelProfiles.detect(listOf(intArrayOf(1, 128, 512, 3))))
         assertNull(GazeModelProfiles.detect(listOf(intArrayOf(1, 36, 60, 1), intArrayOf(1, 3))))

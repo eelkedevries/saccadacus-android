@@ -8,6 +8,12 @@ package com.example.saccadacusandroid
 enum class GazeModelProfile {
     /** Single input `[1,36,60,1]`: one histogram-equalised grayscale eye patch (the original contract). */
     EYE_GRAY,
+
+    /**
+     * WebEyeTrack / BlazeGaze (prompt 049): three inputs — `image` `[1,128,512,3]` RGB both-eyes strip,
+     * `head_vector` `[1,3]`, `face_origin_3d` `[1,3]` — and a `[1,2]` point-of-gaze output.
+     */
+    WEB_EYE_TRACK,
 }
 
 /** Pure (Android-free, unit-testable) profile detection from a model's input tensor shapes (prompt 048). */
@@ -20,6 +26,11 @@ object GazeModelProfiles {
     fun detect(inputShapes: List<IntArray>): GazeModelProfile? {
         if (inputShapes.size == 1 && dimsNoBatch(inputShapes[0]).contentEquals(intArrayOf(36, 60, 1))) {
             return GazeModelProfile.EYE_GRAY
+        }
+        if (inputShapes.size == 3) {
+            val hasStrip = inputShapes.any { dimsNoBatch(it).contentEquals(intArrayOf(128, 512, 3)) }
+            val vec3 = inputShapes.count { dimsNoBatch(it).contentEquals(intArrayOf(3)) }
+            if (hasStrip && vec3 == 2) return GazeModelProfile.WEB_EYE_TRACK
         }
         return null
     }
