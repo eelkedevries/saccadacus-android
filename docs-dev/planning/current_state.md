@@ -155,6 +155,20 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   now say "histogram-equalised" and carry an "Obtaining an MPIIGaze-style model" note (the official
   two-input + data-normalisation-warp path is the larger follow-up). Default iris/blendshape tracking
   is untouched (equalisation lives only in the CNN eye-patch path).
+- **Multi-model wiring `048`+ (in progress, 2026-06-25).** User asked to wire in several specific models.
+  `048` adds a model **input-profile abstraction**: `GazeCnn` detects the loaded model's input profile
+  from its tensor shapes (`GazeModelProfiles.detect`), exposes `activeProfile`, and the eye-gray path
+  runs only for `EYE_GRAY` — so a wrong-shaped side-loaded model is never mis-fed. Then one model family
+  per prompt: `049` **WebEyeTrack/BlazeGaze** (MIT code; 3 inputs — RGB both-eye strip `[1,128,512,3]`
+  + head-vector `[1,3]` + metric origin `[1,3]` → PoG `[-0.5,0.5]²`; few-shot MAML replaced by our
+  calibration), `050` **Open Gaze / Google PoG family** (dual RGB eye crops `[1,3,128,128]` + 8
+  eye-corner landmarks `[1,8]` → cm), `051` **UniGaze / full-face-normalised** (ETH-XGaze-style
+  data-normalised `[1,3,224,224]` → pitch/yaw). All contracts primary-source verified.
+  **Honest flags:** Open Gaze (arXiv 2308.13495) is **withdrawn — no code/weights**; its only runnable
+  twin (`DSSR2/gaze-track`) is **unlicensed** + GazeCapture-tainted, so 050 ships the *profile* and the
+  user must train/obtain weights. UniGaze is **non-commercial** (ModelGo, NC even after conversion) and
+  only the **-B** size is on-device-practical (H/L are 0.6-1.3 GB). As ever: weights are never committed
+  and end-to-end gaze accuracy is on-device-validated.
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
   model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
   commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
@@ -223,3 +237,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `045_in_app_model_reference.md` — in-app collapsible "Gaze models — compare" fold-out (static `GazeModels` reference of 18 surfaced models: licence/year/accuracy/size/pros/cons) (CI green).
 - `046_gaze_models_catalogue.md` — repo catalogue `docs/gaze_models.md` (ranked suitable shortlist + excluded list, with accuracy/year/last-update/licence/verdict); in-app list topped up with RT-GENE/RT-BENE; records the MPIIGaze two-input + data-normalisation contract gap (CI green).
 - `047_cnn_eye_histogram_equalisation.md` — histogram-equalise the gaze-CNN eye patch (MPIIGaze eye-image contrast step; low-light lift); pure GazeImageOps.equalizeHist + tests; contract docs note the official two-input + warp gap (CI green).
+- `048_gaze_model_input_profiles.md` — model input-profile abstraction: GazeCnn detects a model's input profile from its tensor shapes (pure GazeModelProfiles.detect + tests), eye-gray path gated on EYE_GRAY; foundation for multi-input models (CI green).
