@@ -478,10 +478,15 @@ fun OnboardingScreen(modifier: Modifier = Modifier, onDone: () -> Unit) {
 fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
     val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
+    // 3x3 fit grid (>= 6 points for the 2nd-order polynomial fit, prompt 038) + interior held-out checks.
     val fitTargets = remember {
-        listOf(0.15f to 0.15f, 0.85f to 0.15f, 0.5f to 0.5f, 0.15f to 0.85f, 0.85f to 0.85f)
+        listOf(
+            0.15f to 0.15f, 0.5f to 0.15f, 0.85f to 0.15f,
+            0.15f to 0.5f, 0.5f to 0.5f, 0.85f to 0.5f,
+            0.15f to 0.85f, 0.5f to 0.85f, 0.85f to 0.85f,
+        )
     }
-    val valTargets = remember { listOf(0.5f to 0.15f, 0.15f to 0.5f, 0.85f to 0.5f) }
+    val valTargets = remember { listOf(0.3f to 0.3f, 0.7f to 0.3f, 0.3f to 0.7f, 0.7f to 0.7f) }
     val allTargets = remember { fitTargets + valTargets }
     val fitCollected = remember { mutableStateListOf<CalibrationSample>() }
     val valCollected = remember { mutableStateListOf<CalibrationSample>() }

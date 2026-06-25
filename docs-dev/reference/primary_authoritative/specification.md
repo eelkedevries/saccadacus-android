@@ -1,11 +1,13 @@
 # Specification
 
-**Version:** 0.4 · **Last updated:** 2026-06-25
+**Version:** 0.5 · **Last updated:** 2026-06-25
 
 The authoritative design canon for this project. Only filled sections are binding;
 an empty section means "not yet decided". When a decision changes, update the
 relevant section and bump the version.
 
+*Changed in 0.5:* calibration uses a 2nd-order **polynomial** gaze→screen map (affine fallback);
+the live point-of-gaze is **One-Euro**-filtered for stability.
 *Changed in 0.4:* blink detection bounds a blink's maximum duration — a longer closed run is
 eyes-closed / look-away, not a blink.
 *Changed in 0.3:* scope in gaze **calibration**, an eye-look-**blendshape** gaze source,
@@ -86,7 +88,8 @@ user explicitly enables it.
   or from MediaPipe **eye-look blendshapes** (`eyeLookIn/Out/Up/Down`, per eye), which are
   more robust in low light; `tracking_mode` records which. Both populate the same eye-local
   columns in a participant-consistent frame.
-- **Calibration:** an optional **affine map**, fitted from gaze captured at known on-screen
+- **Calibration:** an optional **2nd-order polynomial map** (basis `[1, gx, gy, gx·gy, gx², gy²]`,
+  with an **affine fallback** when too few points are captured), fitted from gaze at known on-screen
   targets, produces a calibrated, normalised (0–1) **point-of-gaze** (`gaze_screen_x/y`); the
   map subsumes the front-camera sign/scale conventions. Calibration is user-initiated and
   persisted; its accuracy depends on the underlying gaze signal.
