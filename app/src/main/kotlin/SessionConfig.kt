@@ -25,4 +25,11 @@ object SessionConfig {
 
     @Volatile
     var sessionNote: String = ""
+
+    /** Optional eye-local smoothing (prompt 021); OFF by default so the default signal path is unchanged. */
+    @Volatile
+    var filterEnabled: Boolean = false
+
+    @Volatile
+    var filterAlpha: Float = 0.3f
 }

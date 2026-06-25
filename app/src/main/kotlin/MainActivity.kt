@@ -96,6 +96,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var overlayEnabled by remember { mutableStateOf(OverlayConfig.enabled) }
     var sessionName by remember { mutableStateOf(SessionConfig.sessionName) }
     var sessionNote by remember { mutableStateOf(SessionConfig.sessionNote) }
+    var filterEnabled by remember { mutableStateOf(SessionConfig.filterEnabled) }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -200,6 +201,11 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         if (rawVideo) {
             Text("Raw video will be saved locally this session — you consent.")
         }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            enabled = !running,
+            onClick = { filterEnabled = !filterEnabled; SessionConfig.filterEnabled = filterEnabled },
+        ) { Text(if (filterEnabled) "Smoothing: ON" else "Smoothing: OFF (raw)") }
         Spacer(Modifier.height(8.dp))
         Button(
             enabled = !batteryExempt,

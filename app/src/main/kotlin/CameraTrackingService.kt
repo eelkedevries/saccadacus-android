@@ -65,6 +65,9 @@ class CameraTrackingService : LifecycleService() {
     // Events (006)
     private val eventAccumulator = EventAccumulator()
 
+    // Optional eye-local smoothing (021); no-op unless SessionConfig.filterEnabled.
+    private val eyeFilter = EyeLocalFilter()
+
     // Session (007)
     private var motionSensors: MotionSensors? = null
 
@@ -124,6 +127,7 @@ class CameraTrackingService : LifecycleService() {
         benchStartNanos = SystemClock.elapsedRealtimeNanos()
         BenchmarkStats.reset(profile.name)
         eventAccumulator.reset()
+        eyeFilter.reset()
         SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
@@ -267,7 +271,7 @@ class CameraTrackingService : LifecycleService() {
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
         maybePublishOverlay(faces, detected)
         publishQuality(detected)
-        val frame = FaceSignalAdapter.toResult(result)
+        val frame = eyeFilter.process(FaceSignalAdapter.toResult(result))
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
         val tNanos = SystemClock.elapsedRealtimeNanos()
@@ -498,6 +502,8 @@ class CameraTrackingService : LifecycleService() {
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
+                w.write("filter_enabled,${SessionConfig.filterEnabled}"); w.newLine()
+                w.write("filter_alpha,${SessionConfig.filterAlpha}"); w.newLine()
                 w.write("raw_video_path,$videoPath"); w.newLine()
                 w.write("start_wallclock_ms,${SessionRecorder.startWallClockMs}"); w.newLine()
                 w.write("start_elapsed_nanos,${SessionRecorder.startElapsedNanos}"); w.newLine()
