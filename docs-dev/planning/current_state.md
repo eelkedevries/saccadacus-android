@@ -138,6 +138,16 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   models can be A/B/C-compared by calibration error + latency. **Honest caveat:** research-only re-implementations score
   ~1.8-2.3 cm, so the current ~1 cm calibrated iris may still be the better signal until a
   good model is trained on clean data.
+- **Gaze-model catalogue + corrected MPIIGaze understanding `045`–`046` (CI-green, 2026-06-25).**
+  `045` surfaced a static in-app "Gaze models — compare" fold-out; `046` writes the durable
+  `docs/gaze_models.md` catalogue (ranked **suitable** shortlist + **excluded** list, each with
+  accuracy / release year / last update / code licence / Saccadacus-fit verdict) and tops the in-app
+  list up with RT-GENE/RT-BENE. **Key correction from a source check of `ptgaze`:** the official
+  MPIIGaze model is a **two-input** network (eye image + 2-D *normalised* head pose) that also needs a
+  full data-normalisation warp (camera intrinsics + 3-D face model + `equalizeHist`) and output
+  un-rotation — so its pretrained weights are **not** a drop-in on our single-input `[1,36,60,1]`
+  contract. The eye-gray contract therefore targets an MPIIGaze-*style* single-input CNN; the faithful
+  weights need a larger 2-input + warp path (catalogued as the next unlock).
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
   model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
   commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
@@ -204,3 +214,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `043_cnn_benchmark_docs.md` — CNN inference-latency benchmark + `docs/gaze_cnn.md` (model contract, side-load, A/B) (CI green).
 - `044_cnn_multiple_models.md` — discover/select multiple side-loaded models (`gaze_models/`), persisted, each recording labelled by `gaze_model` for A/B/C comparison (CI green).
 - `045_in_app_model_reference.md` — in-app collapsible "Gaze models — compare" fold-out (static `GazeModels` reference of 18 surfaced models: licence/year/accuracy/size/pros/cons) (CI green).
+- `046_gaze_models_catalogue.md` — repo catalogue `docs/gaze_models.md` (ranked suitable shortlist + excluded list, with accuracy/year/last-update/licence/verdict); in-app list topped up with RT-GENE/RT-BENE; records the MPIIGaze two-input + data-normalisation contract gap (CI green).
