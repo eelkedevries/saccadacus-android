@@ -148,6 +148,13 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   un-rotation — so its pretrained weights are **not** a drop-in on our single-input `[1,36,60,1]`
   contract. The eye-gray contract therefore targets an MPIIGaze-*style* single-input CNN; the faithful
   weights need a larger 2-input + warp path (catalogued as the next unlock).
+- **MPIIGaze first increment `047` (CI-green, 2026-06-25).** Lands the achievable, contract-preserving
+  step toward #1: the eye patch is now **histogram-equalised** before normalisation (MPIIGaze's
+  eye-image contrast step; also a low-light contrast lift) via a pure, unit-tested
+  `GazeImageOps.equalizeHist` (cv2 semantics). The `[1,36,60,1]` shape is unchanged; the contract docs
+  now say "histogram-equalised" and carry an "Obtaining an MPIIGaze-style model" note (the official
+  two-input + data-normalisation-warp path is the larger follow-up). Default iris/blendshape tracking
+  is untouched (equalisation lives only in the CNN eye-patch path).
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
   model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
   commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
@@ -215,3 +222,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `044_cnn_multiple_models.md` — discover/select multiple side-loaded models (`gaze_models/`), persisted, each recording labelled by `gaze_model` for A/B/C comparison (CI green).
 - `045_in_app_model_reference.md` — in-app collapsible "Gaze models — compare" fold-out (static `GazeModels` reference of 18 surfaced models: licence/year/accuracy/size/pros/cons) (CI green).
 - `046_gaze_models_catalogue.md` — repo catalogue `docs/gaze_models.md` (ranked suitable shortlist + excluded list, with accuracy/year/last-update/licence/verdict); in-app list topped up with RT-GENE/RT-BENE; records the MPIIGaze two-input + data-normalisation contract gap (CI green).
+- `047_cnn_eye_histogram_equalisation.md` — histogram-equalise the gaze-CNN eye patch (MPIIGaze eye-image contrast step; low-light lift); pure GazeImageOps.equalizeHist + tests; contract docs note the official two-input + warp gap (CI green).
