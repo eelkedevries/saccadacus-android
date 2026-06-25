@@ -32,6 +32,11 @@ object GazeCnn {
     var activeModel: String = ""
         private set
 
+    /** Detected input profile of the loaded model (prompt 048); null when none/unrecognised. */
+    @Volatile
+    var activeProfile: GazeModelProfile? = null
+        private set
+
     /** True only when a side-loaded model has been loaded successfully. */
     val isAvailable: Boolean get() = interpreter != null
 
@@ -64,6 +69,14 @@ object GazeCnn {
             null
         }
         activeModel = if (interpreter != null) chosen else ""
+        activeProfile = interpreter?.let { itp ->
+            try {
+                val shapes = (0 until itp.getInputTensorCount()).map { itp.getInputTensor(it).shape() }
+                GazeModelProfiles.detect(shapes)
+            } catch (t: Throwable) {
+                null
+            }
+        }
     }
 
     @Synchronized
@@ -71,6 +84,7 @@ object GazeCnn {
         interpreter?.close()
         interpreter = null
         activeModel = ""
+        activeProfile = null
     }
 
     /**

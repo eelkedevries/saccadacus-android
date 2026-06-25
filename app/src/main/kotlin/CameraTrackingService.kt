@@ -325,7 +325,9 @@ class CameraTrackingService : LifecycleService() {
         maybePublishOverlay(faces, detected)
         publishQuality(detected)
         var frame = eyeFilter.process(FaceSignalAdapter.toResult(result))
-        if (SessionConfig.signalSource == SessionConfig.SOURCE_CNN && GazeCnn.isAvailable) {
+        if (SessionConfig.signalSource == SessionConfig.SOURCE_CNN && GazeCnn.isAvailable &&
+            GazeCnn.activeProfile == GazeModelProfile.EYE_GRAY
+        ) {
             frame = applyCnnGaze(frame, result, bitmap)
         }
         SignalStats.update(frame)

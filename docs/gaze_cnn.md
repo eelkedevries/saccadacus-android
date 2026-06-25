@@ -23,6 +23,11 @@ download.
   result feeds calibration → point-of-gaze, so any consistent units work (calibration absorbs the
   scale/convention).
 
+The app **auto-detects a model's input profile** from its input tensor shapes at load (prompt 048). The
+supported profile today is **EYE_GRAY** (the single `[1,36,60,1]` patch above); the CNN source only runs
+a model whose profile it recognises, otherwise it falls back to iris. Further profiles (multi-input
+models) are added as they are wired in.
+
 A small MPIIGaze-style normalised-eye CNN matches this contract; train it on commercially-clean or
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head
 pose the app already extracts from the MediaPipe landmarks).
