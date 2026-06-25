@@ -14,6 +14,12 @@ enum class GazeModelProfile {
      * `head_vector` `[1,3]`, `face_origin_3d` `[1,3]` — and a `[1,2]` point-of-gaze output.
      */
     WEB_EYE_TRACK,
+
+    /**
+     * Open Gaze / Google PoG family (prompt 050): two `[1,128,128,3]` RGB eye crops + an `[1,8]`
+     * eye-corner landmark vector, output `[1,2]` point-of-gaze in centimetres.
+     */
+    DUAL_EYE_POG,
 }
 
 /** Pure (Android-free, unit-testable) profile detection from a model's input tensor shapes (prompt 048). */
@@ -31,6 +37,12 @@ object GazeModelProfiles {
             val hasStrip = inputShapes.any { dimsNoBatch(it).contentEquals(intArrayOf(128, 512, 3)) }
             val vec3 = inputShapes.count { dimsNoBatch(it).contentEquals(intArrayOf(3)) }
             if (hasStrip && vec3 == 2) return GazeModelProfile.WEB_EYE_TRACK
+            val eyeCrops = inputShapes.count {
+                val d = dimsNoBatch(it)
+                d.contentEquals(intArrayOf(128, 128, 3)) || d.contentEquals(intArrayOf(3, 128, 128))
+            }
+            val lms8 = inputShapes.count { dimsNoBatch(it).contentEquals(intArrayOf(8)) }
+            if (eyeCrops == 2 && lms8 == 1) return GazeModelProfile.DUAL_EYE_POG
         }
         return null
     }

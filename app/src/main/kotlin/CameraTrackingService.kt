@@ -333,6 +333,31 @@ class CameraTrackingService : LifecycleService() {
         return frame.copy(leftEye = left, rightEye = right)
     }
 
+    /** Override gaze with an Open Gaze / Google-family model's point-of-gaze in cm (prompt 050). */
+    private fun applyOpenGazeGaze(
+        frame: TrackingFrameResult,
+        result: FaceLandmarkerResult,
+        bitmap: Bitmap,
+    ): TrackingFrameResult {
+        val landmarks = result.faceLandmarks().firstOrNull() ?: return frame
+        val n = landmarks.size
+        if (n < 468) return frame
+        val xs = FloatArray(n) { landmarks[it].x() }
+        val ys = FloatArray(n) { landmarks[it].y() }
+        val t0 = SystemClock.elapsedRealtimeNanos()
+        val leftEye = OpenGazePreprocessor.eyePatchRgb(bitmap, xs, ys, GazeGeometry.LEFT_EYE, flip = true)
+            ?: return frame
+        val rightEye = OpenGazePreprocessor.eyePatchRgb(bitmap, xs, ys, GazeGeometry.RIGHT_EYE, flip = false)
+            ?: return frame
+        val lms = OpenGazeGeometry.eyeCornerLms(xs, ys) ?: return frame
+        val pog = GazeCnn.inferMulti(listOf(leftEye, rightEye, lms)) ?: return frame
+        cnnLatenciesMs.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000.0)
+        // One binocular PoG (cm) for both eyes; calibration maps cm -> screen (its SVR/affine stand-in).
+        val left = frame.leftEye?.copy(irisXLocal = pog[0], irisYLocal = pog[1])
+        val right = frame.rightEye?.copy(irisXLocal = pog[0], irisYLocal = pog[1])
+        return frame.copy(leftEye = left, rightEye = right)
+    }
+
     private fun handleFaceResult(result: FaceLandmarkerResult, bitmap: Bitmap) {
         val submitNanos = submitTimesNanos.remove(result.timestampMs())
         if (submitNanos != null) {
@@ -362,6 +387,7 @@ class CameraTrackingService : LifecycleService() {
             frame = when (GazeCnn.activeProfile) {
                 GazeModelProfile.EYE_GRAY -> applyCnnGaze(frame, result, bitmap)
                 GazeModelProfile.WEB_EYE_TRACK -> applyWebEyeTrackGaze(frame, result, bitmap)
+                GazeModelProfile.DUAL_EYE_POG -> applyOpenGazeGaze(frame, result, bitmap)
                 else -> frame
             }
         }

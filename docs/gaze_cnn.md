@@ -24,9 +24,9 @@ download.
   scale/convention).
 
 The app **auto-detects a model's input profile** from its input tensor shapes at load (prompt 048). The
-supported profiles are **EYE_GRAY** (the single `[1,36,60,1]` patch above) and **WEB_EYE_TRACK** (below);
-the CNN source only runs a model whose profile it recognises, otherwise it falls back to iris. Further
-profiles (multi-input models) are added as they are wired in.
+supported profiles are **EYE_GRAY** (the single `[1,36,60,1]` patch above), **WEB_EYE_TRACK**, and
+**DUAL_EYE_POG** (both below); the CNN source only runs a model whose profile it recognises, otherwise it
+falls back to iris. Further profiles (multi-input models) are added as they are wired in.
 
 ### WebEyeTrack / BlazeGaze profile (multi-input)
 
@@ -50,6 +50,30 @@ open("webeyetrack.tflite", "wb").write(tf.lite.TFLiteConverter.from_keras_model(
 
 Caveats: the `head_vector` Euler source and the `face_origin_3d` reconstruction are approximate (we lack
 true camera intrinsics and the full metric face mesh) — verify on-device via the calibration error.
+
+### Open Gaze / Google PoG family profile (multi-input)
+
+`DUAL_EYE_POG` — the SAGE / iTracker-style point-of-gaze model (catalogue #7/#8/#9). Detected when the
+model has **three inputs**: `leftEye` and `rightEye` `[1,128,128,3]` (RGB eye crops, NHWC) plus `lms`
+`[1,8]` (eye-corner coordinates). The app builds each eye crop (the **left horizontally flipped**),
+normalises per channel `(x/255 - mean)/std` with mean `(0.3741,0.4076,0.5425)` and the small std
+`(0.02,0.02,0.02)`, and the 8 normalised eye-corner coordinates. Output `[1,2]` is a point-of-gaze in
+**centimetres** (camera origin), fed through calibration (standing in for the model's per-user SVR/affine
+personalisation). Inputs must be in order `[leftEye, rightEye, lms]`, NHWC.
+
+**Licensing reality (important):** the named "Open Gaze" paper (arXiv:2308.13495) was **withdrawn** and
+ships **no code or weights**. Its runnable twin `DSSR2/gaze-track` (GSoC 2021) has **no licence**
+(all-rights-reserved) and GazeCapture-trained checkpoints (research-only). So **no weights are committed
+and none can be** — train or obtain your own. To convert a model you have the rights to:
+
+```
+# PyTorch .ckpt (3 inputs: leftEye, rightEye, lms) -> ONNX -> NHWC TFLite
+torch.onnx.export(model.eval(), (leye, reye, lms), "opengaze.onnx", opset_version=17)
+# then: onnx2tf -i opengaze.onnx -o tf   (NHWC);  convert tf -> opengaze.tflite; push to gaze_models/
+```
+
+Caveats: the eye-corner / flip / left-right conventions are best-effort vs gaze-track — if gaze reads
+mirrored, swap the eye inputs; verify on-device via the calibration error.
 
 A small MPIIGaze-style normalised-eye CNN matches this contract; train it on commercially-clean or
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head

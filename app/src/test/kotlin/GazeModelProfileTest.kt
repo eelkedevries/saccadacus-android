@@ -35,6 +35,16 @@ class GazeModelProfileTest {
     }
 
     @Test
+    fun detectsDualEyePog() {
+        assertEquals(
+            GazeModelProfile.DUAL_EYE_POG,
+            GazeModelProfiles.detect(
+                listOf(intArrayOf(1, 128, 128, 3), intArrayOf(1, 128, 128, 3), intArrayOf(1, 8)),
+            ),
+        )
+    }
+
+    @Test
     fun rejectsUnknownShapes() {
         assertNull(GazeModelProfiles.detect(listOf(intArrayOf(1, 128, 512, 3))))
         assertNull(GazeModelProfiles.detect(listOf(intArrayOf(1, 36, 60, 1), intArrayOf(1, 3))))
