@@ -71,11 +71,13 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   overlay (015), low-light/face-lost alert (016), sessions screen (017), and session naming
   + notes (018) round it out. Each prompt carried a "Cross-prompt impact check"; none
   invalidated a later prompt. **With this, the written v1 spec (§Scope) is fully implemented.**
-- **Beyond-v1 queue `019`–`028` is drafted** (executing): fixation detection (019),
-  per-session summary stats (020), optional eye-local filtering (021), orphaned-`.tmp`
-  recovery (022), orientation robustness (023), resource guards — storage/thermal (024),
-  settings persistence via DataStore (025), onboarding + identity (026), user docs (027),
-  and expanded unit tests (028). Each carries a "Cross-prompt impact check".
+- **Beyond-v1 queue `019`–`028` is implemented and CI-green** (executed 2026-06-25,
+  directly to `main`): fixation detection (019), per-session summary stats (020), optional
+  eye-local filtering (021), orphaned-`.tmp` recovery (022), orientation robustness (023),
+  resource guards — storage/thermal (024), settings persistence via DataStore (025),
+  onboarding + identity (026), user docs (027), and expanded unit tests (028). Each carried
+  a "Cross-prompt impact check"; none invalidated a later prompt. One fix-forward was needed
+  (025's `Settings` object clashed with `android.provider.Settings` → renamed `AppSettings`).
 - **Deliberately deferred (not drafted), with reasons:** an on-device **calibration
   routine** and **gaze-from-eye-look-blendshapes** both depend on a confirmed-working gaze
   signal (the daylight retest) — and blendshape gaze would also extend the binding CSV
@@ -111,3 +113,14 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `016_low_light_quality_alert.md` — luma/face quality warning in UI + notification (CI green).
 - `017_sessions_screen.md` — in-app sessions list: per-session save/share/delete (CI green).
 - `018_session_naming_notes.md` — name + note per session, in filename + metadata (CI green).
+- `019_fixation_detection.md` — fixation events (the missing core event type) (CI green).
+- `020_session_summary_stats.md` — per-session summary + `summary_<stamp>.csv` sidecar (CI green).
+- `021_eye_local_filtering.md` — optional EMA smoothing of eye-local, off by default (CI green).
+- `022_orphaned_session_recovery.md` — finalise leftover `.tmp` sessions on launch (CI green).
+- `023_orientation_robustness.md` — target-rotation follows the device mid-session (CI green).
+- `024_resource_guards.md` — storage + thermal warnings and safe auto-stop (CI green).
+- `025_settings_persistence.md` — DataStore-backed settings across launches (CI green; renamed
+  `AppSettings` to avoid an `android.provider.Settings` clash).
+- `026_onboarding_and_identity.md` — first-run explainer, permission rationale, brand palette (CI green).
+- `027_user_docs.md` — `docs/` usage + CSV dictionary + privacy note (CI green).
+- `028_unit_tests_expansion.md` — eye-local projection + fixation-detector JUnit tests (CI green).
