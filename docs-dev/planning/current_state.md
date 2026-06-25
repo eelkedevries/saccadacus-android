@@ -99,6 +99,12 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   baseline (`BlinkClassifier`); `035` caps a blink at ~800 ms (a longer closure is eyes-closed /
   look-away, not a blink) and takes the spec to v0.4. Gaze **accuracy** (does the dot land where
   you look) still depends on the calibration validation error — read it from the next `meta_*.csv`.
+- **Full session bundle now exports to Downloads `036` (CI-green, 2026-06-25).** "Save to
+  Downloads" previously copied only the combined CSV, stranding the sidecars (including `meta`,
+  which holds the calibration validation error) in app-private storage. `036` unifies every
+  per-session file onto the one session stamp (`sensors`/`frame_log`/`benchmark`/`video` joined
+  `meta`/`summary`) and exports the whole stamp-matched bundle in one tap. The calibration error
+  is also shown live on the calibration screen ("Mean check error … (screen units)").
 - **Still deferred (not drafted):** saccade/fixation threshold re-tuning for the calibrated gaze
   signal, smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
   calibrated on-device data to design against. The empty `binocular_x/y_local` columns in
@@ -152,3 +158,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `033_calibration_validation.md` — held-out calibration validation error + on-screen status (CI green).
 - `034_blink_state_adaptive_baseline.md` — per-eye adaptive open-baseline blink classifier; open eyes no longer read "closing" (CI green).
 - `035_blink_event_duration_cap.md` — cap blink events at ~800 ms; long closures are not blinks; spec → v0.4 (CI green).
+- `036_export_session_bundle.md` — Save-to-Downloads exports the whole session bundle; sidecars unified onto the session stamp (CI green).
