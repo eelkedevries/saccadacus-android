@@ -89,10 +89,22 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   to make the signal work in poor light, and calibration retires the manual `SignConvention`
   guessing. The yellow overlay dot + the on-screen calibration check error make that retest
   self-evaluating.
-- **Still deferred (not drafted):** detector-threshold re-tuning for the new signal,
-  smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
-  calibrated on-device data to design against. **Release signing + R8/distribution** still
-  needs a keystore secret (not in a public repo) and isn't exercised by `assembleDebug`.
+- **Daylight retest done + blink fix `034`–`035` (CI-green, 2026-06-25).** A good-light
+  on-device recording confirmed the night-time near-zero gaze was indeed **low light**: the iris
+  signal varies properly, reliability is 1.0, head-roll sits at ~0° (rotation fix holds), 5 clean
+  fixations were detected, and **calibration produced a full-screen point-of-gaze**. The one real
+  bug it exposed — blink mislabelling (≈58 % of *open* frames read "closing" because MediaPipe's
+  `eyeBlink` open baseline is person/camera-angle dependent, then chained into multi-second false
+  blinks) — is fixed: `034` makes per-eye blink classification adaptive to each eye's open
+  baseline (`BlinkClassifier`); `035` caps a blink at ~800 ms (a longer closure is eyes-closed /
+  look-away, not a blink) and takes the spec to v0.4. Gaze **accuracy** (does the dot land where
+  you look) still depends on the calibration validation error — read it from the next `meta_*.csv`.
+- **Still deferred (not drafted):** saccade/fixation threshold re-tuning for the calibrated gaze
+  signal, smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
+  calibrated on-device data to design against. The empty `binocular_x/y_local` columns in
+  Binocular mode are a known minor data-completeness gap (gaze itself averages the per-eye
+  irises). **Release signing + R8/distribution** still needs a keystore secret (not in a public
+  repo) and isn't exercised by `assembleDebug`.
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
@@ -138,3 +150,5 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `031_gaze_calibration_fit.md` — calibration capture + least-squares affine fit + unit tests (CI green).
 - `032_apply_calibration_point_of_gaze.md` — apply calibration → `gaze_screen_x/y` CSV + overlay gaze dot (CI green).
 - `033_calibration_validation.md` — held-out calibration validation error + on-screen status (CI green).
+- `034_blink_state_adaptive_baseline.md` — per-eye adaptive open-baseline blink classifier; open eyes no longer read "closing" (CI green).
+- `035_blink_event_duration_cap.md` — cap blink events at ~800 ms; long closures are not blinks; spec → v0.4 (CI green).
