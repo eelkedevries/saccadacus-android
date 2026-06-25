@@ -111,6 +111,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val overlay by OverlayStats.state.collectAsState()
     val quality by QualityStats.state.collectAsState()
     val summary by SummaryStats.state.collectAsState()
+    val gaze by GazeStats.state.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
@@ -426,6 +427,10 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                // Calibrated point-of-gaze (normalised screen), when calibrated.
+                gaze?.let { (gx, gy) ->
+                    drawCircle(Color.Yellow, radius = 14f, center = Offset(gx * size.width, gy * size.height))
+                }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -478,7 +483,7 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             var sumY = 0f
             var n = 0
             repeat(20) {
-                avgGaze(SignalStats.state.value)?.let { (gx, gy) ->
+                binocularGaze(SignalStats.state.value)?.let { (gx, gy) ->
                     sumX += gx; sumY += gy; n++
                 }
                 delay(50)
@@ -524,14 +529,6 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             }
         }
     }
-}
-
-private fun avgGaze(frame: TrackingFrameResult?): Pair<Float, Float>? {
-    if (frame == null) return null
-    val xs = listOfNotNull(frame.leftEye?.irisXLocal, frame.rightEye?.irisXLocal).filter { !it.isNaN() }
-    val ys = listOfNotNull(frame.leftEye?.irisYLocal, frame.rightEye?.irisYLocal).filter { !it.isNaN() }
-    if (xs.isEmpty() || ys.isEmpty()) return null
-    return Pair(xs.average().toFloat(), ys.average().toFloat())
 }
 
 @Composable

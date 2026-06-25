@@ -74,6 +74,15 @@ object GazeCalibrator {
     }
 }
 
+/** Binocular-averaged eye-local gaze for a frame (the calibration input), or null. */
+fun binocularGaze(frame: TrackingFrameResult?): Pair<Float, Float>? {
+    if (frame == null) return null
+    val xs = listOfNotNull(frame.leftEye?.irisXLocal, frame.rightEye?.irisXLocal).filter { !it.isNaN() }
+    val ys = listOfNotNull(frame.leftEye?.irisYLocal, frame.rightEye?.irisYLocal).filter { !it.isNaN() }
+    if (xs.isEmpty() || ys.isEmpty()) return null
+    return Pair(xs.average().toFloat(), ys.average().toFloat())
+}
+
 /** Holds the active calibration (persisted by [AppSettings]); null = uncalibrated. */
 object CalibrationStore {
     private val _state = MutableStateFlow<CalibrationModel?>(null)

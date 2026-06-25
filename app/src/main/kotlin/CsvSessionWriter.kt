@@ -41,7 +41,14 @@ class CsvSessionWriter(private val dir: File) {
     }
 
     @Synchronized
-    fun appendSample(frame: TrackingFrameResult, tElapsedNanos: Long, cameraSensorTs: Long, cameraTsSource: String) {
+    fun appendSample(
+        frame: TrackingFrameResult,
+        tElapsedNanos: Long,
+        cameraSensorTs: Long,
+        cameraTsSource: String,
+        gazeScreenX: Float? = null,
+        gazeScreenY: Float? = null,
+    ) {
         val w = writer ?: return
         val l = frame.leftEye
         val r = frame.rightEye
@@ -58,6 +65,7 @@ class CsvSessionWriter(private val dir: File) {
         row[13] = f(l?.reliability); row[14] = f(r?.reliability)
         row[17] = f(frame.headPose?.yawDeg); row[18] = f(frame.headPose?.pitchDeg); row[19] = f(frame.headPose?.rollDeg)
         row[23] = "${l?.blinkState ?: ""}|${r?.blinkState ?: ""}"
+        row[34] = f(gazeScreenX); row[35] = f(gazeScreenY)
         writeRow(w, row)
     }
 
@@ -161,6 +169,7 @@ class CsvSessionWriter(private val dir: File) {
             "event_type", "event_onset", "event_offset", "event_duration", "event_direction",
             "event_relative_amplitude", "event_confidence", "event_head_motion_label",
             "task_marker", "annotation",
+            "gaze_screen_x", "gaze_screen_y",
         )
     }
 }

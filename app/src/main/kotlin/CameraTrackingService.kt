@@ -304,7 +304,11 @@ class CameraTrackingService : LifecycleService() {
         eventAccumulator.onResult(frame, result.timestampMs())
         val tNanos = SystemClock.elapsedRealtimeNanos()
         SessionRecorder.addSample(frame, tNanos)
-        csvWriter?.appendSample(frame, tNanos, lastCameraSensorTs, "unknown")
+        val pog = CalibrationStore.state.value?.let { cal ->
+            binocularGaze(frame)?.let { (gx, gy) -> cal.map(gx, gy) }
+        }
+        GazeStats.update(pog)
+        csvWriter?.appendSample(frame, tNanos, lastCameraSensorTs, "unknown", pog?.first, pog?.second)
         SessionStats.update(
             SessionSummary(
                 recording = true,
@@ -530,6 +534,7 @@ class CameraTrackingService : LifecycleService() {
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
                 w.write("signal_source,${SessionConfig.signalSource}"); w.newLine()
+                w.write("calibrated,${CalibrationStore.state.value != null}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
                 w.write("filter_enabled,${SessionConfig.filterEnabled}"); w.newLine()
                 w.write("filter_alpha,${SessionConfig.filterAlpha}"); w.newLine()
@@ -803,6 +808,7 @@ class CameraTrackingService : LifecycleService() {
         TrackingStats.onStop()
         SignalStats.clear()
         OverlayStats.clear()
+        GazeStats.clear()
         QualityStats.clear()
         eventAccumulator.reset()
         motionSensors?.stop()

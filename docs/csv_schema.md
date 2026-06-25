@@ -41,9 +41,11 @@ One row per `row_type`. Columns (in order):
 | `event_head_motion_label` | `saccade_head_still` / `saccade_during_head_movement` / `uncertain_head_motion`. |
 | `task_marker` | Label for a `task` (interaction marker) row. |
 | `annotation` | Free text; also carries a fixation `centroid=x;y`. |
+| `gaze_screen_x`, `gaze_screen_y` | Calibrated, normalised (0–1) point-of-gaze; empty when uncalibrated. |
 
-`pupil_*` columns exist but are never populated in v1 (iris-centre only). Raw video is never
-written unless explicitly enabled.
+`tracking_mode` is `iris` or `blendshape` (the gaze source). `gaze_screen_x/y` are populated
+only after calibration. `pupil_*` columns exist but are never populated in v1 (iris-centre
+only). Raw video is never written unless explicitly enabled.
 
 ### Row types
 
