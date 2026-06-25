@@ -78,14 +78,17 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   onboarding + identity (026), user docs (027), and expanded unit tests (028). Each carried
   a "Cross-prompt impact check"; none invalidated a later prompt. One fix-forward was needed
   (025's `Settings` object clashed with `android.provider.Settings` → renamed `AppSettings`).
-- **Gaze/calibration queue `029`–`033` is drafted** (executing): a spec update scoping in
-  calibration + a blendshape gaze source + point-of-gaze (029); an eye-look-**blendshape**
-  gaze source selectable vs iris (030, the likely low-light fix); calibration capture + affine
-  fit (031); apply → point-of-gaze + `gaze_screen_x/y` CSV columns (032); and calibration
-  validation/status (033). Each carries a "Cross-prompt impact check". **Honest caveat:** all
-  of this compiles and is math-tested, but on-device gaze *accuracy* still needs the daylight
-  retest — though 030 is the most direct attempt to make the signal work in poor light, and
-  calibration retires the manual `SignConvention` guessing.
+- **Gaze/calibration queue `029`–`033` is implemented and CI-green** (executed 2026-06-25,
+  directly to `main`): spec → v0.3 scoping in calibration + blendshape source + point-of-gaze
+  (029); an eye-look-**blendshape** gaze source selectable vs iris (030, the likely low-light
+  fix); calibration capture + least-squares affine fit with unit tests (031); apply →
+  point-of-gaze + `gaze_screen_x/y` CSV columns + overlay gaze dot (032); and held-out
+  calibration validation + status (033). Each carried a "Cross-prompt impact check"; none
+  invalidated a later prompt. **Honest caveat:** all of this compiles and is math-tested, but
+  on-device gaze *accuracy* still needs the daylight retest — 030 is the most direct attempt
+  to make the signal work in poor light, and calibration retires the manual `SignConvention`
+  guessing. The yellow overlay dot + the on-screen calibration check error make that retest
+  self-evaluating.
 - **Still deferred (not drafted):** detector-threshold re-tuning for the new signal,
   smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
   calibrated on-device data to design against. **Release signing + R8/distribution** still
@@ -130,3 +133,8 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `026_onboarding_and_identity.md` — first-run explainer, permission rationale, brand palette (CI green).
 - `027_user_docs.md` — `docs/` usage + CSV dictionary + privacy note (CI green).
 - `028_unit_tests_expansion.md` — eye-local projection + fixation-detector JUnit tests (CI green).
+- `029_spec_scope_gaze_calibration.md` — spec → v0.3: calibration, blendshape source, point-of-gaze in scope (CI green).
+- `030_blendshape_gaze_source.md` — eye-look-blendshape gaze source, selectable vs iris (low-light fix) (CI green).
+- `031_gaze_calibration_fit.md` — calibration capture + least-squares affine fit + unit tests (CI green).
+- `032_apply_calibration_point_of_gaze.md` — apply calibration → `gaze_screen_x/y` CSV + overlay gaze dot (CI green).
+- `033_calibration_validation.md` — held-out calibration validation error + on-screen status (CI green).
