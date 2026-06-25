@@ -212,10 +212,10 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Button(
             enabled = !running,
             onClick = {
-                signalSource = if (signalSource == SessionConfig.SOURCE_IRIS) {
-                    SessionConfig.SOURCE_BLENDSHAPE
-                } else {
-                    SessionConfig.SOURCE_IRIS
+                signalSource = when (signalSource) {
+                    SessionConfig.SOURCE_IRIS -> SessionConfig.SOURCE_BLENDSHAPE
+                    SessionConfig.SOURCE_BLENDSHAPE -> SessionConfig.SOURCE_CNN
+                    else -> SessionConfig.SOURCE_IRIS
                 }
                 SessionConfig.signalSource = signalSource
             },

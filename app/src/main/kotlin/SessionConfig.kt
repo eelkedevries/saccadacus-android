@@ -12,6 +12,7 @@ object SessionConfig {
     // Gaze signal source (prompt 030): iris-centre (default) or eye-look blendshapes.
     const val SOURCE_IRIS = "iris"
     const val SOURCE_BLENDSHAPE = "blendshape"
+    const val SOURCE_CNN = "cnn" // side-loaded on-device gaze CNN (prompt 042)
 
     @Volatile
     var signalSource: String = SOURCE_IRIS

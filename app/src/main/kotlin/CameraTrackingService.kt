@@ -141,6 +141,7 @@ class CameraTrackingService : LifecycleService() {
         eventAccumulator.reset()
         eyeFilter.reset()
         gazeSmoother.reset()
+        GazeCnn.load(this) // load the side-loaded CNN if present (no-op otherwise); refreshes each session
         SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
@@ -279,7 +280,21 @@ class CameraTrackingService : LifecycleService() {
         return lastMpTimestamp
     }
 
-    private fun handleFaceResult(result: FaceLandmarkerResult) {
+    /** Override the eye-local gaze with the side-loaded CNN's per-eye output (prompt 042). */
+    private fun applyCnnGaze(frame: TrackingFrameResult, result: FaceLandmarkerResult, bitmap: Bitmap): TrackingFrameResult {
+        val landmarks = result.faceLandmarks().firstOrNull() ?: return frame
+        val n = landmarks.size
+        val xs = FloatArray(n) { landmarks[it].x() }
+        val ys = FloatArray(n) { landmarks[it].y() }
+        val l = GazePreprocessor.eyePatch(bitmap, xs, ys, GazeGeometry.LEFT_EYE)?.let { GazeCnn.infer(it) }
+        val r = GazePreprocessor.eyePatch(bitmap, xs, ys, GazeGeometry.RIGHT_EYE)?.let { GazeCnn.infer(it) }
+        if (l == null && r == null) return frame // no CNN gaze this frame -> keep the iris base (fallback)
+        val left = if (l != null) frame.leftEye?.copy(irisXLocal = l.second, irisYLocal = l.first) else frame.leftEye
+        val right = if (r != null) frame.rightEye?.copy(irisXLocal = r.second, irisYLocal = r.first) else frame.rightEye
+        return frame.copy(leftEye = left, rightEye = right)
+    }
+
+    private fun handleFaceResult(result: FaceLandmarkerResult, bitmap: Bitmap) {
         val submitNanos = submitTimesNanos.remove(result.timestampMs())
         if (submitNanos != null) {
             latenciesMs.add((SystemClock.elapsedRealtimeNanos() - submitNanos) / 1_000_000.0)
@@ -303,7 +318,10 @@ class CameraTrackingService : LifecycleService() {
         TrackingStats.onFace(detected, landmarkCount, blinkLeft, blinkRight)
         maybePublishOverlay(faces, detected)
         publishQuality(detected)
-        val frame = eyeFilter.process(FaceSignalAdapter.toResult(result))
+        var frame = eyeFilter.process(FaceSignalAdapter.toResult(result))
+        if (SessionConfig.signalSource == SessionConfig.SOURCE_CNN && GazeCnn.isAvailable) {
+            frame = applyCnnGaze(frame, result, bitmap)
+        }
         SignalStats.update(frame)
         eventAccumulator.onResult(frame, result.timestampMs())
         val tNanos = SystemClock.elapsedRealtimeNanos()
@@ -769,6 +787,7 @@ class CameraTrackingService : LifecycleService() {
     }
 
     private fun stopTracking() {
+        GazeCnn.close()
         writeBenchmarkCsv()
         finalizeSessionCsv()
         closeResources()

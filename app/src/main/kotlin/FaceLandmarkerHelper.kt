@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.util.Log
+import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -18,7 +19,7 @@ import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
  */
 class FaceLandmarkerHelper(
     context: Context,
-    private val onResult: (FaceLandmarkerResult) -> Unit,
+    private val onResult: (FaceLandmarkerResult, Bitmap) -> Unit,
     private val onError: (String) -> Unit,
 ) {
     private var faceLandmarker: FaceLandmarker? = null
@@ -35,7 +36,7 @@ class FaceLandmarkerHelper(
                 .setNumFaces(1)
                 .setOutputFaceBlendshapes(true)
                 .setOutputFacialTransformationMatrixes(true)
-                .setResultListener { result, _ -> onResult(result) }
+                .setResultListener { result, image -> onResult(result, BitmapExtractor.extract(image)) }
                 .setErrorListener { error -> onError(error.message ?: "unknown MediaPipe error") }
                 .build()
             faceLandmarker = FaceLandmarker.createFromOptions(context, options)

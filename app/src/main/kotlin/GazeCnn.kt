@@ -3,6 +3,8 @@ package com.example.saccadacusandroid
 import android.content.Context
 import java.io.File
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import org.tensorflow.lite.Interpreter
@@ -44,6 +46,24 @@ object GazeCnn {
     fun close() {
         interpreter?.close()
         interpreter = null
+    }
+
+    /**
+     * Run the model on a `[1,36,60,1]` eye patch (prompt 042); returns `(pitch, yaw)` radians, or
+     * null when no model is loaded or inference fails. Called from the single analysis thread.
+     */
+    fun infer(eyePatch: FloatArray): Pair<Float, Float>? {
+        val itp = interpreter ?: return null
+        return try {
+            val buf = ByteBuffer.allocateDirect(eyePatch.size * 4).order(ByteOrder.nativeOrder())
+            for (v in eyePatch) buf.putFloat(v)
+            buf.rewind()
+            val out = Array(1) { FloatArray(2) }
+            itp.run(buf, out)
+            Pair(out[0][0], out[0][1])
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     private fun mapFile(file: File): MappedByteBuffer =
