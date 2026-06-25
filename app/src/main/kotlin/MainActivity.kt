@@ -62,6 +62,7 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        recoverOrphanedSessions(this)
         enableEdgeToEdge()
         setContent {
             AppTheme {
@@ -490,6 +491,29 @@ private fun latestSessionCsv(context: Context): File? {
     return dir.listFiles()
         ?.filter { it.name.startsWith("session_") && it.name.endsWith(".csv") }
         ?.maxByOrNull { it.lastModified() }
+}
+
+/**
+ * Recover sessions left as `.tmp` by a killed service (prompt 022): rename each leftover
+ * `session_*.csv.tmp` to its `.csv` form so the data is not lost. Skipped entirely while a
+ * session is active (the in-progress `.tmp` must not be touched), and never overwrites an
+ * existing `.csv`.
+ */
+private fun recoverOrphanedSessions(context: Context) {
+    if (TrackingStats.state.value.active) return
+    val dir = context.getExternalFilesDir(null) ?: return
+    dir.listFiles()
+        ?.filter { it.name.startsWith("session_") && it.name.endsWith(".csv.tmp") }
+        ?.forEach { tmp ->
+            val finalFile = File(tmp.parentFile, tmp.name.removeSuffix(".tmp"))
+            if (!finalFile.exists()) {
+                try {
+                    tmp.renameTo(finalFile)
+                } catch (t: Throwable) {
+                    // leave the .tmp in place if recovery fails
+                }
+            }
+        }
 }
 
 /** Finalised session CSVs, newest first. The active session writes a `.tmp`, so it is excluded. */
