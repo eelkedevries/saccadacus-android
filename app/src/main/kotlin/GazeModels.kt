@@ -62,6 +62,10 @@ object GazeModels {
             "Best generalisation across datasets", "ViT too heavy for mid-range; explicitly NC + triple-tainted",
         ),
         GazeModelInfo(
+            "RT-GENE / RT-BENE", "Fischer et al. (Imperial College)", "CC BY-NC-SA (code)", "2018 / 2019", "~7.7 deg (in-the-wild)", "VGG ensemble (heavy)",
+            "Full-face 3D gaze; RT-BENE is a strong blink reference", "Heaviest (4-net ensemble); research-only; full-face",
+        ),
+        GazeModelInfo(
             "TabletGaze", "Rice Univ (Huang et al.)", "Academic", "2016", "2.5-3.2 cm", "Small (HoG+RF)",
             "Calibration-free option; classic baseline", "2016 HoG+Random-Forest (not deep); modest",
         ),

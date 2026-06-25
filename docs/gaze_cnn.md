@@ -25,6 +25,9 @@ A small MPIIGaze-style normalised-eye CNN matches this contract; train it on com
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head
 pose the app already extracts from the MediaPipe landmarks).
 
+For a ranked catalogue of candidate models (suitable + excluded, with accuracy / licence / release
+year and the per-model Saccadacus fit), see [`gaze_models.md`](gaze_models.md).
+
 ## How to side-load models
 
 Push one or more models into the `gaze_models/` folder — e.g. over USB:
