@@ -142,7 +142,7 @@ class CameraTrackingService : LifecycleService() {
         motionSensors = MotionSensors(this).also { it.start() }
         getExternalFilesDir(null)?.let { dir ->
             csvWriter = CsvSessionWriter(dir).apply {
-                start("iris", SessionConfig.eyeMode, System.currentTimeMillis(), sessionStamp, SessionConfig.sessionName)
+                start(SessionConfig.signalSource, SessionConfig.eyeMode, System.currentTimeMillis(), sessionStamp, SessionConfig.sessionName)
             }
         }
         createChannel()
@@ -529,6 +529,7 @@ class CameraTrackingService : LifecycleService() {
                 w.write("session_note,${SessionConfig.sessionNote.replace('\n', ' ').replace('\r', ' ')}"); w.newLine()
                 w.write("use_case_mode,${SessionConfig.useCaseMode}"); w.newLine()
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
+                w.write("signal_source,${SessionConfig.signalSource}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
                 w.write("filter_enabled,${SessionConfig.filterEnabled}"); w.newLine()
                 w.write("filter_alpha,${SessionConfig.filterAlpha}"); w.newLine()

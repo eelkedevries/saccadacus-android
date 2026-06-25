@@ -29,6 +29,7 @@ object AppSettings {
     private val FILTER = booleanPreferencesKey("filter_enabled")
     private val SESSION_NAME = stringPreferencesKey("session_name")
     private val SESSION_NOTE = stringPreferencesKey("session_note")
+    private val SIGNAL_SOURCE = stringPreferencesKey("signal_source")
     private val FIRST_RUN_DONE = booleanPreferencesKey("first_run_done")
 
     /** Hydrate the in-memory config from disk. Blocking, but a tiny read at startup. */
@@ -44,6 +45,7 @@ object AppSettings {
         prefs[RAW_VIDEO]?.let { SessionConfig.rawVideoEnabled = it }
         prefs[OVERLAY]?.let { OverlayConfig.enabled = it }
         prefs[FILTER]?.let { SessionConfig.filterEnabled = it }
+        prefs[SIGNAL_SOURCE]?.let { SessionConfig.signalSource = it }
         prefs[SESSION_NAME]?.let { SessionConfig.sessionName = it }
         prefs[SESSION_NOTE]?.let { SessionConfig.sessionNote = it }
     }
@@ -59,6 +61,7 @@ object AppSettings {
                     p[RAW_VIDEO] = SessionConfig.rawVideoEnabled
                     p[OVERLAY] = OverlayConfig.enabled
                     p[FILTER] = SessionConfig.filterEnabled
+                    p[SIGNAL_SOURCE] = SessionConfig.signalSource
                     p[SESSION_NAME] = SessionConfig.sessionName
                     p[SESSION_NOTE] = SessionConfig.sessionNote
                 }

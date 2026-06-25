@@ -112,6 +112,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var sessionName by remember { mutableStateOf(SessionConfig.sessionName) }
     var sessionNote by remember { mutableStateOf(SessionConfig.sessionNote) }
     var filterEnabled by remember { mutableStateOf(SessionConfig.filterEnabled) }
+    var signalSource by remember { mutableStateOf(SessionConfig.signalSource) }
     var showRationale by remember { mutableStateOf(false) }
     val requiredPermissions = remember {
         buildList {
@@ -196,7 +197,19 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 ) { Text(mode) }
             }
         }
-        Text("Mode: $useCase · eyes $eyeMode")
+        Text("Mode: $useCase · eyes $eyeMode · source $signalSource")
+        Spacer(Modifier.height(8.dp))
+        Button(
+            enabled = !running,
+            onClick = {
+                signalSource = if (signalSource == SessionConfig.SOURCE_IRIS) {
+                    SessionConfig.SOURCE_BLENDSHAPE
+                } else {
+                    SessionConfig.SOURCE_IRIS
+                }
+                SessionConfig.signalSource = signalSource
+            },
+        ) { Text("Gaze source: $signalSource (tap to switch)") }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = sessionName,

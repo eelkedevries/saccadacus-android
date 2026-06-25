@@ -19,36 +19,55 @@ object FaceSignalAdapter {
         }
         val landmarks = faces[0]
 
-        var blinkImgLeft = 0f
-        var blinkImgRight = 0f
+        var blinkLeft = 0f
+        var blinkRight = 0f
+        // Eye-look blendshapes (anatomical, per eye) for the blendshape gaze source (030).
+        var lookInL = 0f; var lookOutL = 0f; var lookUpL = 0f; var lookDownL = 0f
+        var lookInR = 0f; var lookOutR = 0f; var lookUpR = 0f; var lookDownR = 0f
         val blendshapes = result.faceBlendshapes()
         if (blendshapes.isPresent && blendshapes.get().isNotEmpty()) {
             for (category in blendshapes.get()[0]) {
                 when (category.categoryName()) {
-                    "eyeBlinkLeft" -> blinkImgLeft = category.score()
-                    "eyeBlinkRight" -> blinkImgRight = category.score()
+                    "eyeBlinkLeft" -> blinkLeft = category.score()
+                    "eyeBlinkRight" -> blinkRight = category.score()
+                    "eyeLookInLeft" -> lookInL = category.score()
+                    "eyeLookOutLeft" -> lookOutL = category.score()
+                    "eyeLookUpLeft" -> lookUpL = category.score()
+                    "eyeLookDownLeft" -> lookDownL = category.score()
+                    "eyeLookInRight" -> lookInR = category.score()
+                    "eyeLookOutRight" -> lookOutR = category.score()
+                    "eyeLookUpRight" -> lookUpR = category.score()
+                    "eyeLookDownRight" -> lookDownR = category.score()
                 }
             }
         }
 
-        val imgLeftEye = eyeFeature(
-            landmarks,
-            FaceMeshIndices.IMG_LEFT_EYE_CORNER_OUTER,
-            FaceMeshIndices.IMG_LEFT_EYE_CORNER_INNER,
-            FaceMeshIndices.IMG_LEFT_IRIS_CENTRE,
-            blinkImgLeft,
-        )
-        val imgRightEye = eyeFeature(
-            landmarks,
-            FaceMeshIndices.IMG_RIGHT_EYE_CORNER_INNER,
-            FaceMeshIndices.IMG_RIGHT_EYE_CORNER_OUTER,
-            FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE,
-            blinkImgRight,
-        )
-
-        // Under a mirrored front camera, the image-left eye is the participant's right eye.
-        val participantLeft = if (SignConvention.MIRROR_X) imgRightEye else imgLeftEye
-        val participantRight = if (SignConvention.MIRROR_X) imgLeftEye else imgRightEye
+        val participantLeft: EyeFeature?
+        val participantRight: EyeFeature?
+        if (SessionConfig.signalSource == SessionConfig.SOURCE_BLENDSHAPE) {
+            // Anatomical, participant frame: +x = participant's right, +y = up. For the left
+            // eye, nasal (in) = toward participant-right; for the right eye, temporal (out) = right.
+            participantLeft = EyeFeature(lookInL - lookOutL, lookUpL - lookDownL, 1f, blinkState(blinkLeft))
+            participantRight = EyeFeature(lookOutR - lookInR, lookUpR - lookDownR, 1f, blinkState(blinkRight))
+        } else {
+            val imgLeftEye = eyeFeature(
+                landmarks,
+                FaceMeshIndices.IMG_LEFT_EYE_CORNER_OUTER,
+                FaceMeshIndices.IMG_LEFT_EYE_CORNER_INNER,
+                FaceMeshIndices.IMG_LEFT_IRIS_CENTRE,
+                blinkLeft,
+            )
+            val imgRightEye = eyeFeature(
+                landmarks,
+                FaceMeshIndices.IMG_RIGHT_EYE_CORNER_INNER,
+                FaceMeshIndices.IMG_RIGHT_EYE_CORNER_OUTER,
+                FaceMeshIndices.IMG_RIGHT_IRIS_CENTRE,
+                blinkRight,
+            )
+            // Under a mirrored front camera, the image-left eye is the participant's right eye.
+            participantLeft = if (SignConvention.MIRROR_X) imgRightEye else imgLeftEye
+            participantRight = if (SignConvention.MIRROR_X) imgLeftEye else imgRightEye
+        }
 
         return TrackingFrameResult(true, 1f, participantLeft, participantRight, headPose(result))
     }

@@ -9,6 +9,13 @@ object SessionConfig {
     val useCaseModes = listOf("Reading", "Experimental", "Natural")
     val eyeModes = listOf("Left", "Right", "Binocular", "Both")
 
+    // Gaze signal source (prompt 030): iris-centre (default) or eye-look blendshapes.
+    const val SOURCE_IRIS = "iris"
+    const val SOURCE_BLENDSHAPE = "blendshape"
+
+    @Volatile
+    var signalSource: String = SOURCE_IRIS
+
     @Volatile
     var useCaseMode: String = useCaseModes.first()
 
