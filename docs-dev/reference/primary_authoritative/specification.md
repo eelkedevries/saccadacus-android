@@ -1,11 +1,14 @@
 # Specification
 
-**Version:** 0.2 · **Last updated:** 2026-06-24
+**Version:** 0.3 · **Last updated:** 2026-06-25
 
 The authoritative design canon for this project. Only filled sections are binding;
 an empty section means "not yet decided". When a decision changes, update the
 relevant section and bump the version.
 
+*Changed in 0.3:* scope in gaze **calibration**, an eye-look-**blendshape** gaze source,
+and a calibrated **point-of-gaze** (new `gaze_screen_x/y` columns; `tracking_mode ∈
+{iris, blendshape}`).
 *Changed in 0.2:* first real fill, from the Android-stack research
 (`docs-dev/planning/android_stack_research_report.md`, non-binding analysis).
 
@@ -20,10 +23,13 @@ foreground service; local on-device processing; persistent-notification controls
 (pause/resume/stop); live tracking-quality feedback; session recording; CSV export;
 optional, consent-gated raw-video storage.
 
+**In scope (v1.x):** gaze **calibration** (an affine map fitted from on-screen targets)
+producing a calibrated, normalised **point-of-gaze**; an eye-look-**blendshape** gaze
+source alongside iris-centre. Accuracy is contingent on the underlying gaze signal.
+
 **Out of scope (v1):** true pupil-centre tracking (iris-centre only — see Domain
-rules); gaze mapping / absolute point-of-gaze; release signing and Play-Store
-distribution; automated cross-app synchronisation beyond timestamp anchors +
-interaction markers.
+rules); release signing and Play-Store distribution; automated cross-app
+synchronisation beyond timestamp anchors + interaction markers.
 
 ## Architecture
 
@@ -57,11 +63,15 @@ head_yaw, head_pitch, head_roll, head_translation_x, head_translation_y, head_tr
 blink_state,
 event_type, event_onset, event_offset, event_duration, event_direction,
 event_relative_amplitude, event_confidence, event_head_motion_label,
-task_marker, annotation
+task_marker, annotation,
+gaze_screen_x, gaze_screen_y
 ```
 
-`pupil_*` columns exist but are **not populated in v1** (iris-centre only). Raw video is
-never written unless the user explicitly enables it.
+`tracking_mode ∈ {iris, blendshape}` records the gaze source. `gaze_screen_x/y` hold a
+calibrated, normalised (0–1) point-of-gaze and are empty when uncalibrated (appended at the
+end of the column set so existing column positions are unchanged). `pupil_*` columns exist
+but are **not populated in v1** (iris-centre only). Raw video is never written unless the
+user explicitly enables it.
 
 ## Domain rules
 
@@ -70,6 +80,14 @@ never written unless the user explicitly enables it.
   up); origin = corner midpoint; normalised by inter-corner distance ("eye-width units").
   **Front-camera mirroring/handedness is resolved in the backend adapter** before
   projection; the projection itself is sign-stable.
+- **Signal sources:** the eye-local gaze signal may come from the **iris-centre** (default)
+  or from MediaPipe **eye-look blendshapes** (`eyeLookIn/Out/Up/Down`, per eye), which are
+  more robust in low light; `tracking_mode` records which. Both populate the same eye-local
+  columns in a participant-consistent frame.
+- **Calibration:** an optional **affine map**, fitted from gaze captured at known on-screen
+  targets, produces a calibrated, normalised (0–1) **point-of-gaze** (`gaze_screen_x/y`); the
+  map subsumes the front-camera sign/scale conventions. Calibration is user-initiated and
+  persisted; its accuracy depends on the underlying gaze signal.
 - **Saccade detection** (eye-width units; thresholds configurable): onset speed 1.0,
   offset speed 0.4 (per second); duration 8–200 ms; minimum amplitude 0.03; binocular
   consistency weight 1.0 (consistent) / 0.6 (inconsistent); confidence =
