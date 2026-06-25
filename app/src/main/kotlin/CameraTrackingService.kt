@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.os.PowerManager
+import android.os.StatFs
 import android.os.SystemClock
 import android.util.Log
 import android.view.OrientationEventListener
@@ -598,7 +600,12 @@ class CameraTrackingService : LifecycleService() {
                 QualitySnapshot.FACE_LOST -> " · ⚠ No face"
                 else -> ""
             }
-            manager.notify(NOTIF_ID, buildNotification("Frames logged: $frameCount$videoSuffix$qualitySuffix. Tap Stop to end."))
+            val warning = TrackingStats.state.value.resourceWarning
+            val resourceSuffix = if (warning.isNotEmpty()) " · ⚠ $warning" else ""
+            manager.notify(
+                NOTIF_ID,
+                buildNotification("Frames logged: $frameCount$videoSuffix$qualitySuffix$resourceSuffix. Tap Stop to end."),
+            )
         } catch (t: Throwable) {
             Log.e(TAG, "notification update failed", t)
         }
@@ -652,6 +659,7 @@ class CameraTrackingService : LifecycleService() {
                 {
                     try {
                         checkFrameHealth()
+                        checkResources()
                     } catch (t: Throwable) {
                         Log.e(TAG, "watchdog tick failed", t)
                     }
@@ -697,6 +705,35 @@ class CameraTrackingService : LifecycleService() {
             refreshNotification()
             Log.i(TAG, "camera frames recovered")
         }
+    }
+
+    /** Advisory storage + thermal guards (024): warn, and on a critical condition auto-stop safely. */
+    private fun checkResources() {
+        if (csvWriter == null) return
+        val path = (getExternalFilesDir(null) ?: filesDir).path
+        val freeBytes = try {
+            StatFs(path).availableBytes
+        } catch (t: Throwable) {
+            Long.MAX_VALUE
+        }
+        val thermal = try {
+            (getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus
+        } catch (t: Throwable) {
+            PowerManager.THERMAL_STATUS_NONE
+        }
+        if (freeBytes < STORAGE_CRITICAL_BYTES || thermal >= PowerManager.THERMAL_STATUS_CRITICAL) {
+            val reason = if (freeBytes < STORAGE_CRITICAL_BYTES) "storage critically low" else "device overheating"
+            TrackingStats.onResourceWarning("Auto-stopped: $reason")
+            Log.w(TAG, "resource guard auto-stop: $reason")
+            mainExecutor.execute { if (csvWriter != null) stopTracking() }
+            return
+        }
+        val warning = when {
+            freeBytes < STORAGE_WARN_BYTES -> "Low storage — consider stopping soon"
+            thermal >= PowerManager.THERMAL_STATUS_SEVERE -> "Device hot — may throttle"
+            else -> ""
+        }
+        TrackingStats.onResourceWarning(warning)
     }
 
     /** Record a user interaction marker as a `task` row at the current canonical timestamp (012). */
@@ -834,6 +871,8 @@ class CameraTrackingService : LifecycleService() {
         private const val OVERLAY_INTERVAL_MS = 100L
         private const val LOW_LIGHT_LUMA = 60.0
         private const val LUMA_EMA_ALPHA = 0.2
+        private const val STORAGE_WARN_BYTES = 200L * 1024 * 1024
+        private const val STORAGE_CRITICAL_BYTES = 50L * 1024 * 1024
         private const val TAG = "SaccadacusFGS"
     }
 }

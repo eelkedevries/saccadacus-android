@@ -314,6 +314,9 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             },
         )
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
+        if (snapshot.resourceWarning.isNotEmpty()) {
+            Text("⚠ ${snapshot.resourceWarning}")
+        }
         if (running) {
             Text(
                 when (quality.label) {

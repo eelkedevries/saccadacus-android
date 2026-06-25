@@ -13,6 +13,7 @@ data class TrackingSnapshot(
     val active: Boolean = false,
     val paused: Boolean = false,
     val cameraLost: Boolean = false,
+    val resourceWarning: String = "",
     val frameCount: Long = 0L,
     val startElapsedRealtimeNanos: Long = 0L,
     val lastFrameElapsedRealtimeNanos: Long = 0L,
@@ -59,6 +60,12 @@ object TrackingStats {
         }
     }
 
+    fun onResourceWarning(warning: String) {
+        if (_state.value.resourceWarning != warning) {
+            _state.value = _state.value.copy(resourceWarning = warning)
+        }
+    }
+
     fun onPause() {
         _state.value = _state.value.copy(paused = true)
     }
@@ -68,6 +75,8 @@ object TrackingStats {
     }
 
     fun onStop() {
+        // resourceWarning is deliberately kept so an auto-stop reason stays visible until the
+        // next start (onStart builds a fresh snapshot, clearing it).
         _state.value = _state.value.copy(active = false, paused = false, cameraLost = false, faceDetected = false)
     }
 }
