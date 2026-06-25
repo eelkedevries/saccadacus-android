@@ -78,12 +78,18 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   onboarding + identity (026), user docs (027), and expanded unit tests (028). Each carried
   a "Cross-prompt impact check"; none invalidated a later prompt. One fix-forward was needed
   (025's `Settings` object clashed with `android.provider.Settings` → renamed `AppSettings`).
-- **Deliberately deferred (not drafted), with reasons:** an on-device **calibration
-  routine** and **gaze-from-eye-look-blendshapes** both depend on a confirmed-working gaze
-  signal (the daylight retest) — and blendshape gaze would also extend the binding CSV
-  schema (a spec decision). **Release signing + R8/distribution** needs a keystore/secret
-  (must not live in a public repo) and isn't exercised by the `assembleDebug` CI gate.
-  The daylight gaze retest remains the gating step for the calibration/gaze work.
+- **Gaze/calibration queue `029`–`033` is drafted** (executing): a spec update scoping in
+  calibration + a blendshape gaze source + point-of-gaze (029); an eye-look-**blendshape**
+  gaze source selectable vs iris (030, the likely low-light fix); calibration capture + affine
+  fit (031); apply → point-of-gaze + `gaze_screen_x/y` CSV columns (032); and calibration
+  validation/status (033). Each carries a "Cross-prompt impact check". **Honest caveat:** all
+  of this compiles and is math-tested, but on-device gaze *accuracy* still needs the daylight
+  retest — though 030 is the most direct attempt to make the signal work in poor light, and
+  calibration retires the manual `SignConvention` guessing.
+- **Still deferred (not drafted):** detector-threshold re-tuning for the new signal,
+  smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
+  calibrated on-device data to design against. **Release signing + R8/distribution** still
+  needs a keystore secret (not in a public repo) and isn't exercised by `assembleDebug`.
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
