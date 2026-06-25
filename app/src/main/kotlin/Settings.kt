@@ -18,7 +18,7 @@ private val Context.settingsDataStore by preferencesDataStore(name = "saccadacus
  * in-memory config objects remain the runtime source of truth; [load] hydrates them at
  * startup and [save] mirrors them (called when the app is backgrounded).
  */
-object Settings {
+object AppSettings {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val PROFILE = stringPreferencesKey("profile")

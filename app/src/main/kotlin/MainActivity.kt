@@ -62,7 +62,7 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Settings.load(this)
+        AppSettings.load(this)
         recoverOrphanedSessions(this)
         enableEdgeToEdge()
         setContent {
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        Settings.save(this) // persist whatever the user changed when the app is backgrounded
+        AppSettings.save(this) // persist whatever the user changed when the app is backgrounded
     }
 }
 
