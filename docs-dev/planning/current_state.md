@@ -105,12 +105,27 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   per-session file onto the one session stamp (`sensors`/`frame_log`/`benchmark`/`video` joined
   `meta`/`summary`) and exports the whole stamp-matched bundle in one tap. The calibration error
   is also shown live on the calibration screen ("Mean check error … (screen units)").
-- **Still deferred (not drafted):** saccade/fixation threshold re-tuning for the calibrated gaze
-  signal, smooth-pursuit detection, gaze heatmaps, and drift re-calibration — these need real
-  calibrated on-device data to design against. The empty `binocular_x/y_local` columns in
-  Binocular mode are a known minor data-completeness gap (gaze itself averages the per-eye
-  irises). **Release signing + R8/distribution** still needs a keystore secret (not in a public
-  repo) and isn't exercised by `assembleDebug`.
+- **Gaze quality/stability research + quick wins `037`–`038` (CI-green, 2026-06-25).** A
+  deep-research pass (21/25 claims adversarially verified across primary sources — Google/Nature
+  2020, FAZE, He/SAGE, TabletGaze, the 1€ Filter) identified the two highest-leverage, lowest-risk
+  levers for this exact on-device pipeline: **temporal filtering** and **calibration beyond a single
+  affine map**. Both shipped: `037` adds a **One-Euro** speed-adaptive filter on the point-of-gaze
+  (smooths the dot during fixations without lagging saccades, always on); `038` upgrades calibration
+  to a **2nd-order polynomial** map (affine fallback, 9-point fit grid + 4 held-out checks,
+  backward-compatible persistence) → spec v0.5. A measured on-device data point preceding this:
+  `meta` reported `calibration_error ≈ 0.099` (~a tenth of the screen, ~1-1.5 cm) with the affine
+  map; the polynomial map targets that. Blink counts and durations are now physiological on-device.
+- **Deferred larger efforts (research-scoped; need explicit go-ahead):** an on-device
+  appearance-based **gaze CNN** via standalone LiteRT + GPU delegate — the higher accuracy ceiling
+  (~0.46 cm controlled, but ~1.35-3.22 cm under real head pose) — held back because Google's model
+  was never open-sourced, re-implementations score worse (1.87-2.32 cm), and NNAPI is out
+  (deprecated + Play-Services-only) so it is a multi-prompt subproject with real mid-range risk; a
+  **high-fps (≥120 Hz) capture mode** for saccade timing (the ~12 fps camera cadence is the verified
+  binding constraint, but higher fps trades off against the low-light iris collapse); and
+  **head-pose normalisation** of gaze (needs calibration spanning head poses). Plus: saccade/fixation
+  threshold re-tuning, smooth-pursuit detection, gaze heatmaps, drift re-calibration, the empty
+  `binocular_x/y_local` columns, and **release signing + R8/distribution** (keystore secret, not in a
+  public repo; not exercised by `assembleDebug`).
 - Workflow: committing and pushing **directly to `main`** (per `AGENTS.md` conventions);
   the earlier feature-branch staging is retired.
 
@@ -159,3 +174,5 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `034_blink_state_adaptive_baseline.md` — per-eye adaptive open-baseline blink classifier; open eyes no longer read "closing" (CI green).
 - `035_blink_event_duration_cap.md` — cap blink events at ~800 ms; long closures are not blinks; spec → v0.4 (CI green).
 - `036_export_session_bundle.md` — Save-to-Downloads exports the whole session bundle; sidecars unified onto the session stamp (CI green).
+- `037_one_euro_gaze_filter.md` — One-Euro speed-adaptive filter on the point-of-gaze for a stable gaze dot (CI green).
+- `038_polynomial_calibration.md` — 2nd-order polynomial gaze→screen map with affine fallback + expanded targets; spec → v0.5 (CI green).
