@@ -22,6 +22,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -94,6 +96,11 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             AppSettings.setFirstRunDone(context)
             onboardingDone = true
         })
+        return
+    }
+    var showCalibration by remember { mutableStateOf(false) }
+    if (showCalibration) {
+        CalibrationScreen(modifier = modifier, onBack = { showCalibration = false })
         return
     }
     val snapshot by TrackingStats.state.collectAsState()
@@ -329,6 +336,12 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         ) {
             Text("Sessions")
         }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { showCalibration = true },
+        ) {
+            Text("Calibrate gaze")
+        }
 
         Spacer(Modifier.height(24.dp))
         Text("Frames logged: ${snapshot.frameCount}")
@@ -444,6 +457,81 @@ fun OnboardingScreen(modifier: Modifier = Modifier, onDone: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         Button(onClick = onDone) { Text("Got it") }
     }
+}
+
+@Composable
+fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val snapshot by TrackingStats.state.collectAsState()
+    val targets = remember {
+        listOf(0.15f to 0.15f, 0.85f to 0.15f, 0.5f to 0.5f, 0.15f to 0.85f, 0.85f to 0.85f)
+    }
+    val collected = remember { mutableStateListOf<CalibrationSample>() }
+    var index by remember { mutableStateOf(-1) }
+    var status by remember { mutableStateOf("Start tracking, then tap Begin and look at each red dot.") }
+
+    LaunchedEffect(index) {
+        if (index in targets.indices) {
+            status = "Look at the dot (${index + 1}/${targets.size})"
+            delay(800)
+            var sumX = 0f
+            var sumY = 0f
+            var n = 0
+            repeat(20) {
+                avgGaze(SignalStats.state.value)?.let { (gx, gy) ->
+                    sumX += gx; sumY += gy; n++
+                }
+                delay(50)
+            }
+            if (n > 0) {
+                val (tx, ty) = targets[index]
+                collected.add(CalibrationSample(sumX / n, sumY / n, tx, ty))
+            }
+            index += 1
+        } else if (index == targets.size) {
+            val model = GazeCalibrator.fit(collected.toList())
+            if (model != null) {
+                CalibrationStore.set(model)
+                AppSettings.save(context)
+                status = "Calibration saved from ${collected.size} points."
+            } else {
+                status = "Calibration failed — no usable gaze captured. Try again in good light."
+            }
+            index = -2
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        if (index in targets.indices) {
+            Canvas(Modifier.fillMaxSize()) {
+                val (tx, ty) = targets[index]
+                drawCircle(Color.Red, radius = 24f, center = Offset(tx * size.width, ty * size.height))
+            }
+        }
+        Column(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+            Text(status, color = Color.White)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = snapshot.active && index < 0,
+                    onClick = { collected.clear(); index = 0 },
+                ) { Text("Begin") }
+                Button(onClick = onBack) { Text("Back") }
+            }
+            if (!snapshot.active) {
+                Spacer(Modifier.height(8.dp))
+                Text("(Tracking isn't running — start it first, then calibrate.)", color = Color.White)
+            }
+        }
+    }
+}
+
+private fun avgGaze(frame: TrackingFrameResult?): Pair<Float, Float>? {
+    if (frame == null) return null
+    val xs = listOfNotNull(frame.leftEye?.irisXLocal, frame.rightEye?.irisXLocal).filter { !it.isNaN() }
+    val ys = listOfNotNull(frame.leftEye?.irisYLocal, frame.rightEye?.irisYLocal).filter { !it.isNaN() }
+    if (xs.isEmpty() || ys.isEmpty()) return null
+    return Pair(xs.average().toFloat(), ys.average().toFloat())
 }
 
 @Composable
