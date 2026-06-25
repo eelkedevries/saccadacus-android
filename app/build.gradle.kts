@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.mediapipe.tasks.vision)
+    implementation(libs.tensorflow.lite)
     implementation(libs.androidx.datastore.preferences)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
