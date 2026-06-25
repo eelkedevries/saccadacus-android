@@ -2,10 +2,11 @@ package com.example.saccadacusandroid.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// Saccadacus brand palette (prompt 026): teal + slate + amber.
+val Teal80 = Color(0xFF7BD8C8)
+val Slate80 = Color(0xFFB7C4CF)
+val Amber80 = Color(0xFFF2D08A)
 
-val Purple40 = Color(0xFF6650A4)
-val PurpleGrey40 = Color(0xFF625B71)
-val Pink40 = Color(0xFF7D5260)
+val Teal40 = Color(0xFF136F63)
+val Slate40 = Color(0xFF4A5B6A)
+val Amber40 = Color(0xFF8A6D1F)

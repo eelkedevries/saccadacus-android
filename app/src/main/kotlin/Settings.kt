@@ -29,6 +29,7 @@ object AppSettings {
     private val FILTER = booleanPreferencesKey("filter_enabled")
     private val SESSION_NAME = stringPreferencesKey("session_name")
     private val SESSION_NOTE = stringPreferencesKey("session_note")
+    private val FIRST_RUN_DONE = booleanPreferencesKey("first_run_done")
 
     /** Hydrate the in-memory config from disk. Blocking, but a tiny read at startup. */
     fun load(context: Context) {
@@ -63,6 +64,23 @@ object AppSettings {
                 }
             } catch (t: Throwable) {
                 // best-effort persistence
+            }
+        }
+    }
+
+    /** First-run onboarding flag (prompt 026), stored in the same DataStore. */
+    fun isFirstRunDone(context: Context): Boolean = try {
+        runBlocking { context.settingsDataStore.data.first() }[FIRST_RUN_DONE] ?: false
+    } catch (t: Throwable) {
+        false
+    }
+
+    fun setFirstRunDone(context: Context) {
+        scope.launch {
+            try {
+                context.settingsDataStore.edit { it[FIRST_RUN_DONE] = true }
+            } catch (t: Throwable) {
+                // best-effort
             }
         }
     }

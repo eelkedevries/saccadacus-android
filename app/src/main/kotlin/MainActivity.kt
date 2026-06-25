@@ -88,6 +88,14 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         return
     }
     val context = LocalContext.current
+    var onboardingDone by remember { mutableStateOf(AppSettings.isFirstRunDone(context)) }
+    if (!onboardingDone) {
+        OnboardingScreen(modifier = modifier, onDone = {
+            AppSettings.setFirstRunDone(context)
+            onboardingDone = true
+        })
+        return
+    }
     val snapshot by TrackingStats.state.collectAsState()
     val benchmark by BenchmarkStats.state.collectAsState()
     val signals by SignalStats.state.collectAsState()
@@ -104,6 +112,13 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     var sessionName by remember { mutableStateOf(SessionConfig.sessionName) }
     var sessionNote by remember { mutableStateOf(SessionConfig.sessionNote) }
     var filterEnabled by remember { mutableStateOf(SessionConfig.filterEnabled) }
+    var showRationale by remember { mutableStateOf(false) }
+    val requiredPermissions = remember {
+        buildList {
+            add(Manifest.permission.CAMERA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.toTypedArray()
+    }
 
     // ~0.5 s tick so "since last frame" keeps climbing even when no frames arrive.
     var nowNanos by remember { mutableStateOf(SystemClock.elapsedRealtimeNanos()) }
@@ -150,7 +165,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Saccadacus — camera feasibility probe")
+        Text("Saccadacus — eye & head tracking")
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ProbeConfig.profiles.forEach { profileOption ->
@@ -226,16 +241,38 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         Button(
             enabled = !running,
             onClick = {
-                val permissions = buildList {
-                    add(Manifest.permission.CAMERA)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        add(Manifest.permission.POST_NOTIFICATIONS)
-                    }
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionLauncher.launch(requiredPermissions)
+                } else {
+                    showRationale = true
                 }
-                permissionLauncher.launch(permissions.toTypedArray())
             },
         ) {
             Text("Start tracking")
+        }
+        if (showRationale) {
+            AlertDialog(
+                onDismissRequest = { showRationale = false },
+                title = { Text("Camera & notifications") },
+                text = {
+                    Text(
+                        "Saccadacus needs the camera to track your eyes, and the notification " +
+                            "permission to show the ongoing recording. Recording only ever runs while " +
+                            "you can see the notification. You'll be asked to grant these next.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRationale = false
+                        permissionLauncher.launch(requiredPermissions)
+                    }) { Text("Continue") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRationale = false }) { Text("Cancel") }
+                },
+            )
         }
         Spacer(Modifier.height(12.dp))
         Button(
@@ -367,6 +404,32 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(16.dp))
         Text(verdict(running, sinceLastSecs))
+    }
+}
+
+@Composable
+fun OnboardingScreen(modifier: Modifier = Modifier, onDone: () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Welcome to Saccadacus")
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Saccadacus records your eye and head movements from the front camera while you use " +
+                "your phone, to study reading and attention.",
+        )
+        Spacer(Modifier.height(8.dp))
+        Text("• Recording only ever starts when you press Start, and a notification and the camera indicator stay visible throughout.")
+        Spacer(Modifier.height(8.dp))
+        Text("• Everything is processed on your device — nothing is uploaded. Video is never recorded unless you explicitly turn it on.")
+        Spacer(Modifier.height(8.dp))
+        Text("• It needs the camera permission to see your eyes and the notification permission to show the ongoing recording.")
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onDone) { Text("Got it") }
     }
 }
 
