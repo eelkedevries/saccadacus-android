@@ -67,6 +67,9 @@ class CameraTrackingService : LifecycleService() {
     private lateinit var profile: TrackingProfile
     private val submitTimesNanos = ConcurrentHashMap<Long, Long>()
     private val latenciesMs = Collections.synchronizedList(ArrayList<Double>())
+
+    // CNN gaze inference latency, ms (043); populated only while the CNN source runs.
+    private val cnnLatenciesMs = Collections.synchronizedList(ArrayList<Double>())
     private var analysedFrames = 0L
     private var resultFrames = 0L
     private var benchStartNanos = 0L
@@ -142,6 +145,7 @@ class CameraTrackingService : LifecycleService() {
         eyeFilter.reset()
         gazeSmoother.reset()
         GazeCnn.load(this) // load the side-loaded CNN if present (no-op otherwise); refreshes each session
+        cnnLatenciesMs.clear()
         SummaryStats.clear()
         SessionRecorder.start(profile.name, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos())
         motionSensors = MotionSensors(this).also { it.start() }
@@ -286,9 +290,11 @@ class CameraTrackingService : LifecycleService() {
         val n = landmarks.size
         val xs = FloatArray(n) { landmarks[it].x() }
         val ys = FloatArray(n) { landmarks[it].y() }
+        val t0 = SystemClock.elapsedRealtimeNanos()
         val l = GazePreprocessor.eyePatch(bitmap, xs, ys, GazeGeometry.LEFT_EYE)?.let { GazeCnn.infer(it) }
         val r = GazePreprocessor.eyePatch(bitmap, xs, ys, GazeGeometry.RIGHT_EYE)?.let { GazeCnn.infer(it) }
         if (l == null && r == null) return frame // no CNN gaze this frame -> keep the iris base (fallback)
+        cnnLatenciesMs.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000.0)
         val left = if (l != null) frame.leftEye?.copy(irisXLocal = l.second, irisYLocal = l.first) else frame.leftEye
         val right = if (r != null) frame.rightEye?.copy(irisXLocal = r.second, irisYLocal = r.first) else frame.rightEye
         return frame.copy(leftEye = left, rightEye = right)
@@ -447,6 +453,24 @@ class CameraTrackingService : LifecycleService() {
                 synchronized(latenciesMs) {
                     for (latency in latenciesMs) {
                         w.write(fmt(latency))
+                        w.newLine()
+                    }
+                }
+                synchronized(cnnLatenciesMs) {
+                    if (cnnLatenciesMs.isNotEmpty()) {
+                        val sorted = cnnLatenciesMs.sorted()
+                        val nC = sorted.size
+                        w.newLine()
+                        w.write("cnn_inference_mean_ms,cnn_inference_p50_ms,cnn_inference_p95_ms,cnn_frames")
+                        w.newLine()
+                        w.write(
+                            listOf(
+                                fmt(sorted.sum() / nC),
+                                fmt(sorted[(nC * 50 / 100).coerceIn(0, nC - 1)]),
+                                fmt(sorted[(nC * 95 / 100).coerceIn(0, nC - 1)]),
+                                nC.toString(),
+                            ).joinToString(","),
+                        )
                         w.newLine()
                     }
                 }

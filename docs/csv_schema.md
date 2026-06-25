@@ -44,7 +44,8 @@ One row per `row_type`. Columns (in order):
 | `annotation` | Free text; also carries a fixation `centroid=x;y`. |
 | `gaze_screen_x`, `gaze_screen_y` | Calibrated, normalised (0–1) point-of-gaze; empty when uncalibrated. |
 
-`tracking_mode` is `iris` or `blendshape` (the gaze source). `gaze_screen_x/y` are populated
+`tracking_mode` is the gaze source — `iris`, `blendshape`, or `cnn` (an optional side-loaded
+on-device gaze CNN; see [`gaze_cnn.md`](gaze_cnn.md)). `gaze_screen_x/y` are populated
 only after calibration. `pupil_*` columns exist but are never populated in v1 (iris-centre
 only). Raw video is never written unless explicitly enabled.
 
