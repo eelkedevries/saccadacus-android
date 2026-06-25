@@ -55,6 +55,24 @@ class EventDetectionTest {
     }
 
     @Test
+    fun ignoresMultiSecondClosure() {
+        // A long eye-closure (eyes-closed / look-away) must not be reported as a blink (prompt 035).
+        val states = List(400) { BlinkState.CLOSED }     // 400 × 10 ms ≈ 4 s closed
+        val samples = states.mapIndexed { i, s -> BlinkSample((i * 10).toLong(), s) }
+        assertEquals(0, BlinkDetector.detect(samples).size)
+    }
+
+    @Test
+    fun detectsInRangeBlinkDespiteCap() {
+        // A ~300 ms blink is well within range and is still detected after the cap.
+        val states = listOf(BlinkState.OPEN) +
+            List(30) { BlinkState.CLOSED } +              // 30 × 10 ms = 300 ms closed
+            listOf(BlinkState.OPEN, BlinkState.OPEN)
+        val samples = states.mapIndexed { i, s -> BlinkSample((i * 10).toLong(), s) }
+        assertEquals(1, BlinkDetector.detect(samples).size)
+    }
+
+    @Test
     fun ringBufferVelocityAndOverwrite() {
         val buffer = FloatRingBuffer(2)
         buffer.add(1f)

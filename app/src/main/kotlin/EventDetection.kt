@@ -152,6 +152,10 @@ object FixationDetector {
 object BlinkDetector {
     private val BLINK_PHASES = setOf(BlinkState.CLOSING, BlinkState.CLOSED, BlinkState.OPENING)
 
+    /** A blink is ≈100–400 ms (slow/voluntary up to ~500 ms); a longer closed run is
+     *  eyes-closed / look-away, not a blink, and is not emitted as a blink event (prompt 035). */
+    const val MAX_DURATION_MS = 800L
+
     fun detect(samples: List<BlinkSample>, minDurationMs: Long = 0L): List<BlinkEvent> {
         val events = ArrayList<BlinkEvent>()
         val n = samples.size
@@ -172,6 +176,7 @@ object BlinkDetector {
             val offsetMs = if (i < n) samples[i].tsMs else samples[end].tsMs
             val durationMs = offsetMs - onsetMs
             if (durationMs < minDurationMs) continue
+            if (durationMs > MAX_DURATION_MS) continue   // long closure: eyes-closed / look-away, not a blink
             events.add(BlinkEvent(onsetMs, offsetMs, durationMs, if (reachedClosed) 0.9f else 0.6f))
         }
         return events

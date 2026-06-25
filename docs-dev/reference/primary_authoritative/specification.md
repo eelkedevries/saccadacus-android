@@ -1,11 +1,13 @@
 # Specification
 
-**Version:** 0.3 · **Last updated:** 2026-06-25
+**Version:** 0.4 · **Last updated:** 2026-06-25
 
 The authoritative design canon for this project. Only filled sections are binding;
 an empty section means "not yet decided". When a decision changes, update the
 relevant section and bump the version.
 
+*Changed in 0.4:* blink detection bounds a blink's maximum duration — a longer closed run is
+eyes-closed / look-away, not a blink.
 *Changed in 0.3:* scope in gaze **calibration**, an eye-look-**blendshape** gaze source,
 and a calibrated **point-of-gaze** (new `gaze_screen_x/y` columns; `tracking_mode ∈
 {iris, blendshape}`).
@@ -94,8 +96,9 @@ user explicitly enables it.
   clamp(mean reliability × consistency × head-motion factor). Head-motion labels:
   `saccade_head_still` / `saccade_during_head_movement` / `uncertain_head_motion`.
 - **Blink detection:** state machine over `BlinkState {open, closing, closed, opening,
-  unknown}`; a contiguous non-open run bracketed by open is a blink; confidence 0.9 if it
-  reached `closed`, else 0.6.
+  unknown}`; a contiguous non-open run bracketed by open, up to a maximum duration (~800 ms),
+  is a blink; a longer closure is treated as eyes-closed / look-away, not a blink. Confidence
+  0.9 if it reached `closed`, else 0.6.
 - **Pupil vs iris:** v1 records **iris-centre** only; a true pupil centre is not available
   from a front RGB camera and is deferred. Never relabel an iris landmark as a pupil.
 - **Initiation:** tracking is always **user-initiated while the app is visible**; never
