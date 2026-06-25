@@ -115,6 +115,13 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   backward-compatible persistence) → spec v0.5. A measured on-device data point preceding this:
   `meta` reported `calibration_error ≈ 0.099` (~a tenth of the screen, ~1-1.5 cm) with the affine
   map; the polynomial map targets that. Blink counts and durations are now physiological on-device.
+- **Robust calibration `039` (CI-green, 2026-06-25).** A follow-up on-device run (on the slow
+  **Battery** profile, ~6 fps) showed the bare polynomial **overfit** — held-out error rose
+  0.099 → 0.112 and curvature amplified gaze noise into screen-space jumps. `039` makes calibration
+  **select** the better of an affine and a **ridge-regularised** polynomial by held-out validation
+  error (`GazeCalibrator.fitBest`), so it can never regress below affine; ridge penalises only the
+  curvature terms, scaled to their own magnitude. Spec → v0.6. **Note for testing:** use the
+  **Balanced/Quality** profile — Battery (~6 fps) undersamples saccades and adds calibration noise.
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** an on-device
   appearance-based **gaze CNN** via standalone LiteRT + GPU delegate — the higher accuracy ceiling
   (~0.46 cm controlled, but ~1.35-3.22 cm under real head pose) — held back because Google's model
@@ -176,3 +183,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `036_export_session_bundle.md` — Save-to-Downloads exports the whole session bundle; sidecars unified onto the session stamp (CI green).
 - `037_one_euro_gaze_filter.md` — One-Euro speed-adaptive filter on the point-of-gaze for a stable gaze dot (CI green).
 - `038_polynomial_calibration.md` — 2nd-order polynomial gaze→screen map with affine fallback + expanded targets; spec → v0.5 (CI green).
+- `039_robust_calibration_selection.md` — calibration picks the better of affine / ridge-regularised polynomial by held-out error; never regresses below affine; spec → v0.6 (CI green; one test-threshold fix-forward).
