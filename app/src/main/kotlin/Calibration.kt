@@ -1,6 +1,7 @@
 package com.example.saccadacusandroid
 
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +59,9 @@ class CalibrationModel(val cx: FloatArray, val cy: FloatArray) {
 
 data class CalibrationSample(val gazeX: Float, val gazeY: Float, val screenX: Float, val screenY: Float)
 
+/** A fitted calibration plus its held-out validation error in normalised-screen units (NaN if unknown). */
+data class CalibrationFit(val model: CalibrationModel, val error: Float)
+
 /**
  * Least-squares fit (gaze → normalised screen). Fits the full 2nd-order polynomial when there are
  * enough points; otherwise (or if that system is singular) falls back to an affine fit embedded in
@@ -73,9 +77,39 @@ object GazeCalibrator {
         return fitBasis(samples) { floatArrayOf(1f, it.gazeX, it.gazeY) }
     }
 
-    /** Solve the normal equations for both axes over [basis]; pad the result to the polynomial size. */
+    /** Relative ridge applied to the polynomial curvature terms (prompt 039). */
+    const val RIDGE = 0.1
+
+    /**
+     * Fit an **affine** and a **ridge-regularised polynomial** candidate and keep whichever has the
+     * lower held-out validation error (prompt 039), so the richer model can never regress below
+     * affine. With no validation points, falls back to the plain [fit]; its error is then NaN.
+     */
+    fun fitBest(fitSamples: List<CalibrationSample>, validation: List<CalibrationSample>): CalibrationFit? {
+        if (validation.isEmpty()) return fit(fitSamples)?.let { CalibrationFit(it, Float.NaN) }
+        val candidates = ArrayList<CalibrationModel>()
+        fitBasis(fitSamples) { floatArrayOf(1f, it.gazeX, it.gazeY) }?.let { candidates.add(it) }
+        if (fitSamples.size >= CalibrationModel.N) {
+            fitBasis(fitSamples, RIDGE) { CalibrationModel.basis(it.gazeX, it.gazeY) }?.let { candidates.add(it) }
+        }
+        return candidates.map { CalibrationFit(it, meanError(it, validation)) }.minByOrNull { it.error }
+    }
+
+    private fun meanError(model: CalibrationModel, validation: List<CalibrationSample>): Float =
+        validation.map { s ->
+            val (px, py) = model.map(s.gazeX, s.gazeY)
+            hypot((px - s.screenX).toDouble(), (py - s.screenY).toDouble()).toFloat()
+        }.average().toFloat()
+
+    /**
+     * Solve the normal equations for both axes over [basis]; pad the result to the polynomial size.
+     * [ridge] applies a relative penalty to the **curvature** terms (index >= 3) only — scaled to
+     * their own magnitude, so it is units-independent and leaves the affine part unbiased — to damp
+     * noise amplification (prompt 039).
+     */
     private fun fitBasis(
         samples: List<CalibrationSample>,
+        ridge: Double = 0.0,
         basis: (CalibrationSample) -> FloatArray,
     ): CalibrationModel? {
         val k = basis(samples[0]).size
@@ -90,6 +124,12 @@ object GazeCalibrator {
                 atbx[i] += bi * s.screenX
                 atby[i] += bi * s.screenY
             }
+        }
+        if (ridge > 0.0 && k > 3) {
+            var diag = 0.0
+            for (i in 3 until k) diag += ata[i][i]
+            val lambda = ridge * diag / (k - 3)
+            for (i in 3 until k) ata[i][i] += lambda
         }
         val cx = solveLinear(ata, atbx) ?: return null
         val cy = solveLinear(ata, atby) ?: return null

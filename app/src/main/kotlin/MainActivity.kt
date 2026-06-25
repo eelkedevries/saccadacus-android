@@ -57,7 +57,6 @@ import androidx.core.content.FileProvider
 import com.example.saccadacusandroid.ui.theme.AppTheme
 import java.io.File
 import java.text.SimpleDateFormat
-import kotlin.math.hypot
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -514,17 +513,10 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             }
             index += 1
         } else if (index == allTargets.size) {
-            val model = GazeCalibrator.fit(fitCollected.toList())
-            if (model != null) {
-                val error = if (valCollected.isNotEmpty()) {
-                    valCollected.map { s ->
-                        val (px, py) = model.map(s.gazeX, s.gazeY)
-                        hypot((px - s.screenX).toDouble(), (py - s.screenY).toDouble()).toFloat()
-                    }.average().toFloat()
-                } else {
-                    null
-                }
-                CalibrationStore.set(model, error)
+            val fit = GazeCalibrator.fitBest(fitCollected.toList(), valCollected.toList())
+            if (fit != null) {
+                val error = fit.error.takeIf { !it.isNaN() }
+                CalibrationStore.set(fit.model, error)
                 AppSettings.save(context)
                 status = "Calibration saved. " +
                     (error?.let { "Mean check error ${"%.3f".format(it)} (screen units)." } ?: "")

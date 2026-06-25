@@ -3,6 +3,7 @@ package com.example.saccadacusandroid
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Pure-JVM tests for the polynomial gaze calibration fit (prompts 031, 038). */
@@ -88,5 +89,47 @@ class CalibrationFitTest {
         val (sx, sy) = m.map(0.2f, 0.3f)
         assertEquals((1.2f * 0.2f + 0.1f * 0.3f + 0.5f).toDouble(), sx.toDouble(), 1e-5)
         assertEquals((0.05f * 0.2f + 1.1f * 0.3f + 0.4f).toDouble(), sy.toDouble(), 1e-5)
+    }
+
+    // --- Model selection by held-out validation (prompt 039) ---
+
+    @Test
+    fun fitBestChoosesPolynomialOnCurvedData() {
+        val fx = { gx: Float, gy: Float -> 0.5f + 0.3f * gx + 0.4f * gx * gx + 0.2f * gy * gy }
+        val fy = { gx: Float, gy: Float -> 0.5f + 0.3f * gy - 0.3f * gx * gx }
+        val fitPts = gridSamples(listOf(-1f, 0f, 1f), listOf(-1f, 0f, 1f), fx, fy)
+        val valPts = listOf(0.5f to -0.5f, -0.5f to 0.5f)
+            .map { (gx, gy) -> CalibrationSample(gx, gy, fx(gx, gy), fy(gx, gy)) }
+        val best = GazeCalibrator.fitBest(fitPts, valPts)
+        assertNotNull(best); best!!
+        assertTrue("polynomial should win on curved data, error=${best.error}", best.error < 0.05f)
+        assertTrue("chosen model should carry curvature", best.model.cx[4] > 0.1f)
+    }
+
+    @Test
+    fun fitBestMatchesAffineDataExactly() {
+        // Affine source: the affine candidate fits with ~0 held-out error, so selection never regresses.
+        val fx = { gx: Float, gy: Float -> 0.3f * gx + 0.1f * gy + 0.5f }
+        val fy = { gx: Float, gy: Float -> 0.05f * gx + 0.4f * gy + 0.45f }
+        val fitPts = gridSamples(listOf(-1f, 0f, 1f), listOf(-1f, 0f, 1f), fx, fy)
+        val valPts = listOf(0.4f to -0.6f, -0.7f to 0.3f)
+            .map { (gx, gy) -> CalibrationSample(gx, gy, fx(gx, gy), fy(gx, gy)) }
+        val best = GazeCalibrator.fitBest(fitPts, valPts)!!
+        assertEquals(0.0, best.error.toDouble(), 1e-3)
+    }
+
+    @Test
+    fun fitBestEmptyValidationFallsBack() {
+        val pts = gridSamples(listOf(-1f, 0f, 1f), listOf(-1f, 0f, 1f), quadX, quadY)
+        val best = GazeCalibrator.fitBest(pts, emptyList())
+        assertNotNull(best); best!!
+        assertTrue(best.error.isNaN())
+    }
+
+    @Test
+    fun fitBestNullForDegenerate() {
+        val fitPts = (0..7).map { CalibrationSample(0.2f, 0.3f, it * 0.1f, it * 0.1f) }
+        val valPts = listOf(CalibrationSample(0.2f, 0.3f, 0.5f, 0.5f))
+        assertNull(GazeCalibrator.fitBest(fitPts, valPts))
     }
 }

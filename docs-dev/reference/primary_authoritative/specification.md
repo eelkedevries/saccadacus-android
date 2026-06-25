@@ -1,11 +1,13 @@
 # Specification
 
-**Version:** 0.5 · **Last updated:** 2026-06-25
+**Version:** 0.6 · **Last updated:** 2026-06-25
 
 The authoritative design canon for this project. Only filled sections are binding;
 an empty section means "not yet decided". When a decision changes, update the
 relevant section and bump the version.
 
+*Changed in 0.6:* calibration **selects** the better of affine and a **ridge-regularised**
+polynomial map by held-out validation error (never regresses below affine).
 *Changed in 0.5:* calibration uses a 2nd-order **polynomial** gaze→screen map (affine fallback);
 the live point-of-gaze is **One-Euro**-filtered for stability.
 *Changed in 0.4:* blink detection bounds a blink's maximum duration — a longer closed run is
@@ -88,10 +90,11 @@ user explicitly enables it.
   or from MediaPipe **eye-look blendshapes** (`eyeLookIn/Out/Up/Down`, per eye), which are
   more robust in low light; `tracking_mode` records which. Both populate the same eye-local
   columns in a participant-consistent frame.
-- **Calibration:** an optional **2nd-order polynomial map** (basis `[1, gx, gy, gx·gy, gx², gy²]`,
-  with an **affine fallback** when too few points are captured), fitted from gaze at known on-screen
-  targets, produces a calibrated, normalised (0–1) **point-of-gaze** (`gaze_screen_x/y`); the
-  map subsumes the front-camera sign/scale conventions. Calibration is user-initiated and
+- **Calibration:** an optional gaze→screen map — the better of an **affine** and a
+  **ridge-regularised 2nd-order polynomial** (basis `[1, gx, gy, gx·gy, gx², gy²]`), chosen by
+  **held-out validation error** so the richer model never regresses below affine — fitted from gaze
+  at known on-screen targets, produces a calibrated, normalised (0–1) **point-of-gaze**
+  (`gaze_screen_x/y`); the map subsumes the front-camera sign/scale conventions. Calibration is user-initiated and
   persisted; its accuracy depends on the underlying gaze signal.
 - **Saccade detection** (eye-width units; thresholds configurable): onset speed 1.0,
   offset speed 0.4 (per second); duration 8–200 ms; minimum amplitude 0.03; binocular
