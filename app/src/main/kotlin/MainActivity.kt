@@ -57,6 +57,7 @@ import androidx.core.content.FileProvider
 import com.example.saccadacusandroid.ui.theme.AppTheme
 import java.io.File
 import java.text.SimpleDateFormat
+import kotlin.math.hypot
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -112,6 +113,8 @@ fun ControlScreen(modifier: Modifier = Modifier) {
     val quality by QualityStats.state.collectAsState()
     val summary by SummaryStats.state.collectAsState()
     val gaze by GazeStats.state.collectAsState()
+    val calModel by CalibrationStore.state.collectAsState()
+    val calError by CalibrationStore.error.collectAsState()
     var selectedProfile by remember { mutableStateOf(ProbeConfig.selected) }
     var useCase by remember { mutableStateOf(SessionConfig.useCaseMode) }
     var eyeMode by remember { mutableStateOf(SessionConfig.eyeMode) }
@@ -384,6 +387,13 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             },
         )
         Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
+        Text(
+            "Calibration: " + if (calModel != null) {
+                "calibrated" + (calError?.let { " (check err ${"%.3f".format(it)})" } ?: "")
+            } else {
+                "uncalibrated"
+            },
+        )
         if (snapshot.resourceWarning.isNotEmpty()) {
             Text("⚠ ${snapshot.resourceWarning}")
         }
@@ -468,16 +478,20 @@ fun OnboardingScreen(modifier: Modifier = Modifier, onDone: () -> Unit) {
 fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
     val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
-    val targets = remember {
+    val fitTargets = remember {
         listOf(0.15f to 0.15f, 0.85f to 0.15f, 0.5f to 0.5f, 0.15f to 0.85f, 0.85f to 0.85f)
     }
-    val collected = remember { mutableStateListOf<CalibrationSample>() }
+    val valTargets = remember { listOf(0.5f to 0.15f, 0.15f to 0.5f, 0.85f to 0.5f) }
+    val allTargets = remember { fitTargets + valTargets }
+    val fitCollected = remember { mutableStateListOf<CalibrationSample>() }
+    val valCollected = remember { mutableStateListOf<CalibrationSample>() }
     var index by remember { mutableStateOf(-1) }
     var status by remember { mutableStateOf("Start tracking, then tap Begin and look at each red dot.") }
 
     LaunchedEffect(index) {
-        if (index in targets.indices) {
-            status = "Look at the dot (${index + 1}/${targets.size})"
+        if (index in allTargets.indices) {
+            val phase = if (index < fitTargets.size) "calibrate" else "check"
+            status = "Look at the dot ($phase ${index + 1}/${allTargets.size})"
             delay(800)
             var sumX = 0f
             var sumY = 0f
@@ -489,16 +503,26 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                 delay(50)
             }
             if (n > 0) {
-                val (tx, ty) = targets[index]
-                collected.add(CalibrationSample(sumX / n, sumY / n, tx, ty))
+                val (tx, ty) = allTargets[index]
+                val sample = CalibrationSample(sumX / n, sumY / n, tx, ty)
+                if (index < fitTargets.size) fitCollected.add(sample) else valCollected.add(sample)
             }
             index += 1
-        } else if (index == targets.size) {
-            val model = GazeCalibrator.fit(collected.toList())
+        } else if (index == allTargets.size) {
+            val model = GazeCalibrator.fit(fitCollected.toList())
             if (model != null) {
-                CalibrationStore.set(model)
+                val error = if (valCollected.isNotEmpty()) {
+                    valCollected.map { s ->
+                        val (px, py) = model.map(s.gazeX, s.gazeY)
+                        hypot((px - s.screenX).toDouble(), (py - s.screenY).toDouble()).toFloat()
+                    }.average().toFloat()
+                } else {
+                    null
+                }
+                CalibrationStore.set(model, error)
                 AppSettings.save(context)
-                status = "Calibration saved from ${collected.size} points."
+                status = "Calibration saved. " +
+                    (error?.let { "Mean check error ${"%.3f".format(it)} (screen units)." } ?: "")
             } else {
                 status = "Calibration failed — no usable gaze captured. Try again in good light."
             }
@@ -507,9 +531,9 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        if (index in targets.indices) {
+        if (index in allTargets.indices) {
             Canvas(Modifier.fillMaxSize()) {
-                val (tx, ty) = targets[index]
+                val (tx, ty) = allTargets[index]
                 drawCircle(Color.Red, radius = 24f, center = Offset(tx * size.width, ty * size.height))
             }
         }
@@ -519,8 +543,15 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     enabled = snapshot.active && index < 0,
-                    onClick = { collected.clear(); index = 0 },
+                    onClick = { fitCollected.clear(); valCollected.clear(); index = 0 },
                 ) { Text("Begin") }
+                Button(
+                    onClick = {
+                        CalibrationStore.clear()
+                        AppSettings.save(context)
+                        status = "Calibration cleared."
+                    },
+                ) { Text("Clear") }
                 Button(onClick = onBack) { Text("Back") }
             }
             if (!snapshot.active) {

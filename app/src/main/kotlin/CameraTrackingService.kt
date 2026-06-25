@@ -535,6 +535,7 @@ class CameraTrackingService : LifecycleService() {
                 w.write("eye_mode,${SessionConfig.eyeMode}"); w.newLine()
                 w.write("signal_source,${SessionConfig.signalSource}"); w.newLine()
                 w.write("calibrated,${CalibrationStore.state.value != null}"); w.newLine()
+                w.write("calibration_error,${CalibrationStore.error.value ?: ""}"); w.newLine()
                 w.write("raw_video_enabled,${SessionConfig.rawVideoEnabled}"); w.newLine()
                 w.write("filter_enabled,${SessionConfig.filterEnabled}"); w.newLine()
                 w.write("filter_alpha,${SessionConfig.filterAlpha}"); w.newLine()

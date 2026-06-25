@@ -88,11 +88,17 @@ object CalibrationStore {
     private val _state = MutableStateFlow<CalibrationModel?>(null)
     val state: StateFlow<CalibrationModel?> = _state.asStateFlow()
 
-    fun set(model: CalibrationModel?) {
+    /** Mean held-out validation error in normalised-screen units (prompt 033); null if unknown. */
+    private val _error = MutableStateFlow<Float?>(null)
+    val error: StateFlow<Float?> = _error.asStateFlow()
+
+    fun set(model: CalibrationModel?, error: Float? = null) {
         _state.value = model
+        _error.value = error
     }
 
     fun clear() {
         _state.value = null
+        _error.value = null
     }
 }
