@@ -9,6 +9,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
+import android.view.OrientationEventListener
+import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -45,6 +47,11 @@ class CameraTrackingService : LifecycleService() {
     private lateinit var analysisExecutor: ExecutorService
     private var cameraProvider: ProcessCameraProvider? = null
     private var faceHelper: FaceLandmarkerHelper? = null
+
+    // Orientation robustness (023): keep the analysis target rotation following the device so
+    // imageInfo.rotationDegrees (used to rotate the frame upright) stays correct on rotation.
+    private var imageAnalysis: ImageAnalysis? = null
+    private var orientationListener: OrientationEventListener? = null
     private var logWriter: BufferedWriter? = null
     private var frameIndex = 0L
     private var lastNotifUpdateMs = 0L
@@ -149,6 +156,24 @@ class CameraTrackingService : LifecycleService() {
         }
         bindCamera()
         startWatchdog()
+        startOrientationListener()
+    }
+
+    /** Follow device rotation so `imageInfo.rotationDegrees` stays correct as the phone turns (023). */
+    private fun startOrientationListener() {
+        orientationListener?.disable()
+        orientationListener = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN) return
+                val rotation = when (orientation) {
+                    in 45 until 135 -> Surface.ROTATION_270
+                    in 135 until 225 -> Surface.ROTATION_180
+                    in 225 until 315 -> Surface.ROTATION_90
+                    else -> Surface.ROTATION_0
+                }
+                imageAnalysis?.setTargetRotation(rotation)
+            }
+        }.also { if (it.canDetectOrientation()) it.enable() }
     }
 
     private fun bindCamera() {
@@ -172,6 +197,7 @@ class CameraTrackingService : LifecycleService() {
                         .build(),
                 )
                 .build()
+            imageAnalysis = analysis
             analysis.setAnalyzer(analysisExecutor) { image ->
                 if (paused) {
                     image.close()
@@ -710,6 +736,9 @@ class CameraTrackingService : LifecycleService() {
         watchdog?.shutdownNow()
         watchdog = null
         cameraLoss = null
+        orientationListener?.disable()
+        orientationListener = null
+        imageAnalysis = null
         try {
             recording?.stop()
         } catch (t: Throwable) {
