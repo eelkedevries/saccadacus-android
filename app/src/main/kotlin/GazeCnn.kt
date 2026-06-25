@@ -17,8 +17,8 @@ import org.tensorflow.lite.Interpreter
  * model is loaded for a session and its name labels the recording so models can be compared. When no
  * model is present this is a no-op and [isAvailable] is false, so the default tracking is unaffected.
  *
- * Model contract: input `[1, 36, 60, 1]` float32 grayscale in [0,1] (a normalised single-eye patch);
- * output `[1, 2]` float32 = `(pitch, yaw)` in radians.
+ * Model contract: input `[1, 36, 60, 1]` float32 histogram-equalised grayscale in [0,1] (a normalised
+ * single-eye patch; prompt 047); output `[1, 2]` float32 = `(pitch, yaw)` in radians.
  */
 object GazeCnn {
     const val MODELS_DIR = "gaze_models"

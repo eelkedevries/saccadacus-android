@@ -28,8 +28,8 @@ A model is on the shortlist only if it clears all three:
    repo** — you supply your own `.tflite` on the device for your own research.
 2. **None ships as a ready `.tflite`.** Each needs a conversion or training step.
 3. **Only the *eye-gray* input profile exists in the app today** (prompts 040–043: a single-eye
-   `[1,36,60,1]` grayscale patch → `[1,2]` pitch/yaw). Models needing a different input ("new profile"
-   below) need that plumbing built first.
+   `[1,36,60,1]` histogram-equalised grayscale patch → `[1,2]` pitch/yaw; equalisation added in 047).
+   Models needing a different input ("new profile" below) need that plumbing built first.
 
 ## Suitable models (ranked by how close to shipping on Saccadacus)
 

@@ -15,8 +15,10 @@ download.
 - **Location:** put one or more `*.tflite` files in the `gaze_models/` folder of the app's external
   files dir (`/Android/data/com.saccadacus.android/files/gaze_models/`). A single
   `gaze_model.tflite` in the parent folder is still honoured too.
-- **Input:** `[1, 36, 60, 1]` float32 — a normalised single-eye patch, grayscale, values in
-  `[0, 1]` (H = 36, W = 60). The app runs it per eye.
+- **Input:** `[1, 36, 60, 1]` float32 — a normalised single-eye patch, **grayscale and
+  histogram-equalised**, values in `[0, 1]` (H = 36, W = 60). The app runs it per eye. The histogram
+  equalisation matches the MPIIGaze eye-image contrast normalisation and also lifts low-light contrast,
+  so train/convert your model to expect an equalised patch.
 - **Output:** `[1, 2]` float32 = `(pitch, yaw)` in radians. The two eyes are averaged and the
   result feeds calibration → point-of-gaze, so any consistent units work (calibration absorbs the
   scale/convention).
@@ -27,6 +29,16 @@ pose the app already extracts from the MediaPipe landmarks).
 
 For a ranked catalogue of candidate models (suitable + excluded, with accuracy / licence / release
 year and the per-model Saccadacus fit), see [`gaze_models.md`](gaze_models.md).
+
+### Obtaining an MPIIGaze-style model
+
+The official MPIIGaze checkpoint (`ptgaze`, MIT code) does **not** match this contract directly: it is
+a **two-input** network (eye image **+** a 2-D *normalised* head-pose vector) and expects a full
+data-normalisation warp (camera intrinsics + 3-D face model + `equalizeHist`), with its output
+un-rotated by the per-frame normalising matrix. To run on this single-input contract, train (or
+convert) a **single-input MPIIGaze-*style* eye CNN** that takes the equalised `[1,36,60,1]` patch and
+outputs `[1,2]` pitch/yaw. The faithful two-input + warp path (to reuse the official weights) is a
+larger, separately-scoped follow-up — see [`gaze_models.md`](gaze_models.md).
 
 ## How to side-load models
 

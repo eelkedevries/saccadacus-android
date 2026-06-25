@@ -24,13 +24,17 @@ object GazePreprocessor {
         val px = IntArray(n)
         scaled.getPixels(px, 0, GazeGeometry.PATCH_W, 0, 0, GazeGeometry.PATCH_W, GazeGeometry.PATCH_H)
         scaled.recycle()
-        val out = FloatArray(n)
+        // Rec. 601 luma as an 8-bit grayscale buffer, histogram-equalised (MPIIGaze-style contrast
+        // normalisation; also lifts low-light contrast), then normalised to [0,1] (prompt 047).
+        val gray = IntArray(n)
         for (i in 0 until n) {
             val c = px[i]
-            // Rec. 601 luma, normalised to [0,1].
             val lum = 0.299f * Color.red(c) + 0.587f * Color.green(c) + 0.114f * Color.blue(c)
-            out[i] = lum / 255f
+            gray[i] = Math.round(lum).coerceIn(0, 255)
         }
+        val eq = GazeImageOps.equalizeHist(gray)
+        val out = FloatArray(n)
+        for (i in 0 until n) out[i] = eq[i] / 255f
         return out
     }
 }
