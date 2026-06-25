@@ -122,14 +122,26 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   error (`GazeCalibrator.fitBest`), so it can never regress below affine; ridge penalises only the
   curvature terms, scaled to their own magnitude. Spec → v0.6. **Note for testing:** use the
   **Balanced/Quality** profile — Battery (~6 fps) undersamples saccades and adds calibration noise.
-- **Deferred larger efforts (research-scoped; need explicit go-ahead):** an on-device
-  appearance-based **gaze CNN** via standalone LiteRT + GPU delegate — the higher accuracy ceiling
-  (~0.46 cm controlled, but ~1.35-3.22 cm under real head pose) — held back because Google's model
-  was never open-sourced, re-implementations score worse (1.87-2.32 cm), and NNAPI is out
-  (deprecated + Play-Services-only) so it is a multi-prompt subproject with real mid-range risk; a
-  **high-fps (≥120 Hz) capture mode** for saccade timing (the ~12 fps camera cadence is the verified
-  binding constraint, but higher fps trades off against the low-light iris collapse); and
-  **head-pose normalisation** of gaze (needs calibration spanning head poses). Plus: saccade/fixation
+- **On-device gaze-CNN scaffolding `040`–`043` (CI-green, 2026-06-25).** A 3-agent scout confirmed
+  the integration is clean but **no gaze model can be legally bundled** — every pretrained gaze model
+  is trained on a non-commercial/research-only dataset (GazeCapture, MPIIGaze, ETH-XGaze, Gaze360),
+  several explicitly forbidding "models trained on the dataset", and this repo is public. So the
+  scaffolding is **additive and side-loaded** (user-supplied model, never committed): `040` standalone
+  LiteRT (`org.tensorflow:tensorflow-lite`, CPU/XNNPACK, no Play Services; coexists with MediaPipe's
+  embedded LiteRT — the spike) + a `GazeCnn` loader; `041` eye-crop/head-pose preprocessing (pure
+  `GazeGeometry` + tests, Android `GazePreprocessor`); `042` a third `SOURCE_CNN` signal source that
+  feeds the **same** calibration/point-of-gaze and falls back to iris when no model is present; `043`
+  a CNN inference-latency benchmark + `docs/gaze_cnn.md`. Model contract `[1,36,60,1]` grayscale →
+  `[1,2]` pitch/yaw. The app is now CNN-ready; a clean (self-trained) model drops in by placing
+  `gaze_model.tflite` on the device. **Honest caveat:** research-only re-implementations score
+  ~1.8-2.3 cm, so the current ~1 cm calibrated iris may still be the better signal until a
+  good model is trained on clean data.
+- **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
+  model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
+  commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
+  capture mode** for saccade timing (the ~12 fps camera cadence is the verified binding constraint,
+  but higher fps trades off against the low-light iris collapse); and **head-pose normalisation** of
+  gaze (needs calibration spanning head poses). Plus: saccade/fixation
   threshold re-tuning, smooth-pursuit detection, gaze heatmaps, drift re-calibration, the empty
   `binocular_x/y_local` columns, and **release signing + R8/distribution** (keystore secret, not in a
   public repo; not exercised by `assembleDebug`).
@@ -184,3 +196,7 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `037_one_euro_gaze_filter.md` — One-Euro speed-adaptive filter on the point-of-gaze for a stable gaze dot (CI green).
 - `038_polynomial_calibration.md` — 2nd-order polynomial gaze→screen map with affine fallback + expanded targets; spec → v0.5 (CI green).
 - `039_robust_calibration_selection.md` — calibration picks the better of affine / ridge-regularised polynomial by held-out error; never regresses below affine; spec → v0.6 (CI green; one test-threshold fix-forward).
+- `040_cnn_runtime_model_loader.md` — standalone LiteRT/TFLite runtime + GazeCnn loader for a side-loaded model (dependency spike; coexists with MediaPipe) (CI green).
+- `041_cnn_eye_preprocessing.md` — eye-crop/head-pose preprocessing: pure GazeGeometry (+ tests) + Android GazePreprocessor → `[1,36,60,1]` input (CI green).
+- `042_cnn_signal_source.md` — third `SOURCE_CNN` gaze source feeding the existing calibration/point-of-gaze; iris fallback; 3-way UI toggle (CI green).
+- `043_cnn_benchmark_docs.md` — CNN inference-latency benchmark + `docs/gaze_cnn.md` (model contract, side-load, A/B) (CI green).
