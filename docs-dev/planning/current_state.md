@@ -203,3 +203,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `042_cnn_signal_source.md` — third `SOURCE_CNN` gaze source feeding the existing calibration/point-of-gaze; iris fallback; 3-way UI toggle (CI green).
 - `043_cnn_benchmark_docs.md` — CNN inference-latency benchmark + `docs/gaze_cnn.md` (model contract, side-load, A/B) (CI green).
 - `044_cnn_multiple_models.md` — discover/select multiple side-loaded models (`gaze_models/`), persisted, each recording labelled by `gaze_model` for A/B/C comparison (CI green).
+- `045_in_app_model_reference.md` — in-app collapsible "Gaze models — compare" fold-out (static `GazeModels` reference of 18 surfaced models: licence/year/accuracy/size/pros/cons) (CI green).
