@@ -133,7 +133,9 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   feeds the **same** calibration/point-of-gaze and falls back to iris when no model is present; `043`
   a CNN inference-latency benchmark + `docs/gaze_cnn.md`. Model contract `[1,36,60,1]` grayscale →
   `[1,2]` pitch/yaw. The app is now CNN-ready; a clean (self-trained) model drops in by placing
-  `gaze_model.tflite` on the device. **Honest caveat:** research-only re-implementations score
+  `gaze_model.tflite` on the device. `044` extends this to **multiple side-loaded models**
+  (`gaze_models/` dir, in-app selector, each recording labelled by `gaze_model` in the meta) so
+  models can be A/B/C-compared by calibration error + latency. **Honest caveat:** research-only re-implementations score
   ~1.8-2.3 cm, so the current ~1 cm calibrated iris may still be the better signal until a
   good model is trained on clean data.
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
@@ -200,3 +202,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `041_cnn_eye_preprocessing.md` — eye-crop/head-pose preprocessing: pure GazeGeometry (+ tests) + Android GazePreprocessor → `[1,36,60,1]` input (CI green).
 - `042_cnn_signal_source.md` — third `SOURCE_CNN` gaze source feeding the existing calibration/point-of-gaze; iris fallback; 3-way UI toggle (CI green).
 - `043_cnn_benchmark_docs.md` — CNN inference-latency benchmark + `docs/gaze_cnn.md` (model contract, side-load, A/B) (CI green).
+- `044_cnn_multiple_models.md` — discover/select multiple side-loaded models (`gaze_models/`), persisted, each recording labelled by `gaze_model` for A/B/C comparison (CI green).
