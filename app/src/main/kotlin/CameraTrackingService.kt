@@ -358,6 +358,26 @@ class CameraTrackingService : LifecycleService() {
         return frame.copy(leftEye = left, rightEye = right)
     }
 
+    /** Override gaze with a full-face model's output (prompt 051; UniGaze-B etc.). */
+    private fun applyFullFaceGaze(
+        frame: TrackingFrameResult,
+        result: FaceLandmarkerResult,
+        bitmap: Bitmap,
+    ): TrackingFrameResult {
+        val landmarks = result.faceLandmarks().firstOrNull() ?: return frame
+        val n = landmarks.size
+        val xs = FloatArray(n) { landmarks[it].x() }
+        val ys = FloatArray(n) { landmarks[it].y() }
+        val t0 = SystemClock.elapsedRealtimeNanos()
+        val patch = FaceCropPreprocessor.facePatch(bitmap, xs, ys) ?: return frame
+        val out = GazeCnn.infer(patch) ?: return frame // single-input [1,224,224,3] -> [1,2]
+        cnnLatenciesMs.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000.0)
+        // One binocular gaze pair for both eyes; calibration maps it (absorbing the angle convention).
+        val left = frame.leftEye?.copy(irisXLocal = out.second, irisYLocal = out.first)
+        val right = frame.rightEye?.copy(irisXLocal = out.second, irisYLocal = out.first)
+        return frame.copy(leftEye = left, rightEye = right)
+    }
+
     private fun handleFaceResult(result: FaceLandmarkerResult, bitmap: Bitmap) {
         val submitNanos = submitTimesNanos.remove(result.timestampMs())
         if (submitNanos != null) {
@@ -388,6 +408,7 @@ class CameraTrackingService : LifecycleService() {
                 GazeModelProfile.EYE_GRAY -> applyCnnGaze(frame, result, bitmap)
                 GazeModelProfile.WEB_EYE_TRACK -> applyWebEyeTrackGaze(frame, result, bitmap)
                 GazeModelProfile.DUAL_EYE_POG -> applyOpenGazeGaze(frame, result, bitmap)
+                GazeModelProfile.FULL_FACE -> applyFullFaceGaze(frame, result, bitmap)
                 else -> frame
             }
         }

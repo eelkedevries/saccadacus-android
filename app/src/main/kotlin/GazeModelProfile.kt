@@ -20,6 +20,12 @@ enum class GazeModelProfile {
      * eye-corner landmark vector, output `[1,2]` point-of-gaze in centimetres.
      */
     DUAL_EYE_POG,
+
+    /**
+     * Full-face models (prompt 051): a single `[1,224,224,3]` RGB face crop, output `[1,2]` gaze
+     * angles. Serves UniGaze-B / ETH-XGaze / MobileGaze / L2CS.
+     */
+    FULL_FACE,
 }
 
 /** Pure (Android-free, unit-testable) profile detection from a model's input tensor shapes (prompt 048). */
@@ -32,6 +38,9 @@ object GazeModelProfiles {
     fun detect(inputShapes: List<IntArray>): GazeModelProfile? {
         if (inputShapes.size == 1 && dimsNoBatch(inputShapes[0]).contentEquals(intArrayOf(36, 60, 1))) {
             return GazeModelProfile.EYE_GRAY
+        }
+        if (inputShapes.size == 1 && dimsNoBatch(inputShapes[0]).contentEquals(intArrayOf(224, 224, 3))) {
+            return GazeModelProfile.FULL_FACE
         }
         if (inputShapes.size == 3) {
             val hasStrip = inputShapes.any { dimsNoBatch(it).contentEquals(intArrayOf(128, 512, 3)) }

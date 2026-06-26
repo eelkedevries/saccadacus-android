@@ -35,6 +35,14 @@ class GazeModelProfileTest {
     }
 
     @Test
+    fun detectsFullFace() {
+        assertEquals(
+            GazeModelProfile.FULL_FACE,
+            GazeModelProfiles.detect(listOf(intArrayOf(1, 224, 224, 3))),
+        )
+    }
+
+    @Test
     fun detectsDualEyePog() {
         assertEquals(
             GazeModelProfile.DUAL_EYE_POG,

@@ -24,9 +24,9 @@ download.
   scale/convention).
 
 The app **auto-detects a model's input profile** from its input tensor shapes at load (prompt 048). The
-supported profiles are **EYE_GRAY** (the single `[1,36,60,1]` patch above), **WEB_EYE_TRACK**, and
-**DUAL_EYE_POG** (both below); the CNN source only runs a model whose profile it recognises, otherwise it
-falls back to iris. Further profiles (multi-input models) are added as they are wired in.
+supported profiles are **EYE_GRAY** (the single `[1,36,60,1]` patch above), **WEB_EYE_TRACK**,
+**DUAL_EYE_POG**, and **FULL_FACE** (all below); the CNN source only runs a model whose profile it
+recognises, otherwise it falls back to iris. Further profiles are added as they are wired in.
 
 ### WebEyeTrack / BlazeGaze profile (multi-input)
 
@@ -74,6 +74,30 @@ torch.onnx.export(model.eval(), (leye, reye, lms), "opengaze.onnx", opset_versio
 
 Caveats: the eye-corner / flip / left-right conventions are best-effort vs gaze-track — if gaze reads
 mirrored, swap the eye inputs; verify on-device via the calibration error.
+
+### Full-face profile (single-input)
+
+`FULL_FACE` — a single `[1,224,224,3]` RGB face crop → `[1,2]` gaze angles. Serves **UniGaze-B**,
+ETH-XGaze, MobileGaze and L2CS-Net. The app crops the face bounding box, resizes to 224×224, and
+ImageNet-normalises per channel (mean `(0.485,0.456,0.406)`, std `(0.229,0.224,0.225)`), NHWC; the
+`[1,2]` output (pitch/yaw or yaw/pitch — the order is absorbed by calibration) feeds the gaze signal.
+
+**Important caveats:**
+- This is a **plain landmark face box, not the ETH-XGaze data-normalisation warp** these models are
+  trained on (solvePnP head pose + `warpPerspective` + un-rotation). Accuracy is therefore reduced vs
+  the papers (UniGaze ablates this) — calibration recovers some of it; the faithful warp is a
+  documented future step.
+- **UniGaze:** only the **-B** size (~86 MB, ~45 MB int8) is on-device-viable — **-L/-H (0.6–1.3 GB)
+  will not run on a phone**. Its licence is **non-commercial** (ModelGo MG-BY-NC, NC even after
+  conversion) and the weights are research-only — supply your own; nothing is committed.
+
+**Convert to TFLite** (NHWC; supply your own weights):
+
+```
+# PyTorch -> ONNX -> NHWC TFLite (UniGaze-B; or use Google's ai-edge-torch directly)
+torch.onnx.export(model.eval(), face_224, "unigaze_b.onnx", opset_version=17)
+# onnx2tf -i unigaze_b.onnx -o tf  (NHWC) ; convert tf -> unigaze_b.tflite ; push to gaze_models/
+```
 
 A small MPIIGaze-style normalised-eye CNN matches this contract; train it on commercially-clean or
 self-collected data (the standard appearance-based pipeline uses the eye-region crop plus the head

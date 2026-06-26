@@ -45,7 +45,7 @@ A model is on the shortlist only if it clears all three:
 | 8 | **iTracker / GazeCapture** | MIT CSAIL | 2 eyes + face + grid → PoG | ~1.3–2.0 cm | 2016 | ~2016 | Caffe | research-only | The original mobile-gaze benchmark. Dated (Caffe); multi-input. |
 | 9 | **Open Gaze** (replication) | open repl. (arXiv 2308.13495) | eye crops + landmarks → PoG | ~1.9 cm | 2023 | ~2023 | repo weights | research (repo) | Open clone of Google's 0.46 cm approach; worse than the original. **Profile wired (prompt 050)** as `DUAL_EYE_POG` (also serves #7/#8); arXiv 2308.13495 is **withdrawn** — supply your own weights. |
 | 10 | **FAZE** | NVlabs | norm. eye → gaze (few-shot) | 3.18 deg @ 3-shot | 2019 | ~2020 | weights | **NVIDIA SCL** (non-comm.) | Best personalisation idea (MAML). Hard NC licence; complex. |
-| 11 | **UniGaze** | ut-vision | full-face ViT → yaw/pitch | SOTA cross-dataset | 2025 | 2025 | ViT (large) | **ModelGo MG-BY-NC** | Best generalisation across datasets. ViT too heavy for mid-range; explicitly NC. |
+| 11 | **UniGaze** | ut-vision | full-face ViT → yaw/pitch | SOTA cross-dataset | 2025 | 2025 | ViT (large) | **ModelGo MG-BY-NC** | Best generalisation across datasets. **Profile wired (prompt 051)** as `FULL_FACE`; only **-B** is on-device-viable (L/H won't run); explicitly NC. |
 | 12 | **RT-GENE / RT-BENE** | Fischer et al. (Imperial College) | full-face + eyes → 3-D gaze + blink | ~7.7 deg (in-the-wild) | 2018 / 2019 | ~2020 | VGG, 4-net ensemble | **CC BY-NC-SA** | Research; heaviest (ensemble). **RT-BENE is a useful blink reference.** |
 
 ### MPIIGaze — the contract gap (why #1 is not a drop-in)
@@ -97,6 +97,8 @@ order that unlocks the most of the shortlist:
    patch in prompt 047. Targets a single-input MPIIGaze-style CNN.
 2. **eye-gray + 2-D head pose + normalisation warp** — unlocks the **faithful MPIIGaze** (#1) using the
    official weights.
-3. **full-face** → yaw/pitch — unlocks **#3, #4, #6, #11, #12**.
+3. **full-face** → yaw/pitch — **wired in prompt 051 as `FULL_FACE`** (serves #3, #4, #6, #11; uses a
+   plain landmark face box — the ETH-XGaze data-normalisation warp for best accuracy is a documented
+   follow-up).
 4. **multi-input point-of-gaze** (eyes + face + landmarks/grid) — unlocks **#7, #8, #9**.
 5. **few-shot personalisation** — **#10**.
