@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -55,6 +58,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.example.saccadacusandroid.ui.ChipSelector
+import com.example.saccadacusandroid.ui.LabeledSwitch
+import com.example.saccadacusandroid.ui.SectionCard
+import com.example.saccadacusandroid.ui.StatRow
 import com.example.saccadacusandroid.ui.theme.AppTheme
 import java.io.File
 import java.text.SimpleDateFormat
@@ -175,148 +182,334 @@ fun ControlScreen(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Saccadacus — eye & head tracking")
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProbeConfig.profiles.forEach { profileOption ->
-                Button(
-                    enabled = !running && selectedProfile != profileOption,
-                    onClick = {
-                        selectedProfile = profileOption
-                        ProbeConfig.selected = profileOption
-                    },
-                ) { Text(profileOption.name) }
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Saccadacus", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Eye & head movement recorder",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Text("Profile: ${selectedProfile.name}")
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SessionConfig.useCaseModes.forEach { mode ->
-                Button(
-                    enabled = !running && useCase != mode,
-                    onClick = { useCase = mode; SessionConfig.useCaseMode = mode },
-                ) { Text(mode) }
+
+        SectionCard("Recording") {
+            val stateLine = when {
+                running && cameraLost -> "Camera lost — retrying…"
+                running && paused -> "Paused"
+                running && snapshot.faceDetected -> "Recording · face detected"
+                running -> "Recording · face not detected"
+                else -> "Idle — ready to record"
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SessionConfig.eyeModes.forEach { mode ->
-                Button(
-                    enabled = !running && eyeMode != mode,
-                    onClick = { eyeMode = mode; SessionConfig.eyeMode = mode },
-                ) { Text(mode) }
-            }
-        }
-        Text("Mode: $useCase · eyes $eyeMode · source $signalSource")
-        Spacer(Modifier.height(8.dp))
-        Button(
-            enabled = !running,
-            onClick = {
-                signalSource = when (signalSource) {
-                    SessionConfig.SOURCE_IRIS -> SessionConfig.SOURCE_BLENDSHAPE
-                    SessionConfig.SOURCE_BLENDSHAPE -> SessionConfig.SOURCE_CNN
-                    else -> SessionConfig.SOURCE_IRIS
-                }
-                SessionConfig.signalSource = signalSource
-            },
-        ) { Text("Gaze source: $signalSource (tap to switch)") }
-        if (signalSource == SessionConfig.SOURCE_CNN) {
-            val models = remember(signalSource, running) { GazeCnn.availableModels(context) }
-            Button(
-                enabled = !running && models.isNotEmpty(),
-                onClick = {
-                    if (models.isNotEmpty()) {
-                        val cur = models.indexOf(gazeModel)
-                        gazeModel = models[(cur + 1).mod(models.size)]
-                        SessionConfig.gazeModelName = gazeModel
-                        AppSettings.save(context)
-                    }
-                },
-            ) {
-                Text(
-                    if (models.isEmpty()) {
-                        "No CNN models found — side-load a .tflite"
-                    } else {
-                        "Model: ${gazeModel.ifEmpty { models.first() }} (tap to switch)"
+            Text(
+                stateLine,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (running && !paused && !cameraLost) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            if (running) {
+                StatRow("Elapsed", formatDuration(runningSecs))
+                StatRow("Rate", "${fps.toInt()} fps")
+                StatRow("Since last frame", "${formatSeconds(sinceLastSecs)} s")
+                StatRow(
+                    "Lighting",
+                    when (quality.label) {
+                        QualitySnapshot.LOW_LIGHT -> "Low (luma ${quality.luma.toInt()}) — may be unreliable"
+                        QualitySnapshot.FACE_LOST -> "No face in view"
+                        QualitySnapshot.GOOD -> "Good (luma ${quality.luma.toInt()})"
+                        else -> "—"
                     },
                 )
+                if (rawVideo) StatRow("Raw video", "● recording")
             }
-            Spacer(Modifier.height(8.dp))
-        }
-        Spacer(Modifier.height(8.dp))
-        var modelsExpanded by remember { mutableStateOf(false) }
-        Button(onClick = { modelsExpanded = !modelsExpanded }) {
-            Text("Gaze models - compare (tap to ${if (modelsExpanded) "hide" else "show"})")
-        }
-        if (modelsExpanded) {
-            Text("Reference snapshot - weights are research-only; verify upstream.")
-            Spacer(Modifier.height(4.dp))
-            GazeModels.all.forEachIndexed { i, m ->
-                Text("${i + 1}. ${m.name}", fontWeight = FontWeight.Bold)
-                Text("${m.publisher} · ${m.license} · ${m.year}")
-                Text("${m.accuracy} · ${m.size}")
-                Text("+ ${m.pros}")
-                Text("- ${m.cons}")
-                Spacer(Modifier.height(6.dp))
+            if (snapshot.resourceWarning.isNotEmpty()) {
+                Text(
+                    "⚠ ${snapshot.resourceWarning}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = sessionName,
-            onValueChange = { sessionName = it; SessionConfig.sessionName = it },
-            enabled = !running,
-            singleLine = true,
-            label = { Text("Session name (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = sessionNote,
-            onValueChange = { sessionNote = it; SessionConfig.sessionNote = it },
-            enabled = !running,
-            singleLine = true,
-            label = { Text("Note (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(
-            enabled = !running,
-            onClick = { rawVideo = !rawVideo; SessionConfig.rawVideoEnabled = rawVideo },
-        ) { Text(if (rawVideo) "Raw video: ON" else "Raw video: OFF (tap to enable)") }
-        if (rawVideo) {
-            Text("Raw video will be saved locally this session — you consent.")
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(
-            enabled = !running,
-            onClick = { filterEnabled = !filterEnabled; SessionConfig.filterEnabled = filterEnabled },
-        ) { Text(if (filterEnabled) "Smoothing: ON" else "Smoothing: OFF (raw)") }
-        Spacer(Modifier.height(8.dp))
-        Button(
-            enabled = !batteryExempt,
-            onClick = { requestIgnoreBatteryOptimizations(context) },
-        ) { Text(if (batteryExempt) "Battery: unrestricted ✓" else "Allow background (battery)") }
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = { overlayEnabled = !overlayEnabled; OverlayConfig.enabled = overlayEnabled },
-        ) { Text(if (overlayEnabled) "Overlay: ON (watch the iris)" else "Overlay: OFF") }
-        Spacer(Modifier.height(16.dp))
-        Button(
-            enabled = !running,
-            onClick = {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                    PackageManager.PERMISSION_GRANTED
+            if (!running) {
+                Button(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionLauncher.launch(requiredPermissions)
+                        } else {
+                            showRationale = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start recording") }
+            } else {
+                Button(
+                    onClick = { stopTrackingService(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Stop recording") }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    permissionLauncher.launch(requiredPermissions)
-                } else {
-                    showRationale = true
+                    OutlinedButton(
+                        enabled = !paused,
+                        onClick = { pauseTrackingService(context) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Pause") }
+                    OutlinedButton(
+                        enabled = paused,
+                        onClick = { resumeTrackingService(context) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Resume") }
+                    OutlinedButton(
+                        onClick = { markTrackingService(context) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Mark") }
                 }
-            },
-        ) {
-            Text("Start tracking")
+                Text(
+                    "“Mark” drops a timestamp into the recording (e.g. when a task starts).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+
+        SectionCard(
+            "Recording setup",
+            if (running) "Locked while recording." else "Set these before you start.",
+        ) {
+            OutlinedTextField(
+                value = sessionName,
+                onValueChange = { sessionName = it; SessionConfig.sessionName = it },
+                enabled = !running,
+                singleLine = true,
+                label = { Text("Session name (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = sessionNote,
+                onValueChange = { sessionNote = it; SessionConfig.sessionNote = it },
+                enabled = !running,
+                singleLine = true,
+                label = { Text("Note (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            ChipSelector(
+                label = "Quality profile",
+                description = "Higher quality uses more battery.",
+                options = ProbeConfig.profiles,
+                selected = selectedProfile,
+                enabled = !running,
+                labelOf = { it.name },
+                onSelect = { selectedProfile = it; ProbeConfig.selected = it },
+            )
+            ChipSelector(
+                label = "Use case",
+                options = SessionConfig.useCaseModes,
+                selected = useCase,
+                enabled = !running,
+                onSelect = { useCase = it; SessionConfig.useCaseMode = it },
+            )
+            ChipSelector(
+                label = "Eyes tracked",
+                options = SessionConfig.eyeModes,
+                selected = eyeMode,
+                enabled = !running,
+                onSelect = { eyeMode = it; SessionConfig.eyeMode = it },
+            )
+            ChipSelector(
+                label = "Gaze source",
+                description = "How gaze is estimated. Iris is the default; CNN runs a side-loaded model.",
+                options = listOf(SessionConfig.SOURCE_IRIS, SessionConfig.SOURCE_BLENDSHAPE, SessionConfig.SOURCE_CNN),
+                selected = signalSource,
+                enabled = !running,
+                onSelect = { signalSource = it; SessionConfig.signalSource = it },
+            )
+            if (signalSource == SessionConfig.SOURCE_CNN) {
+                val models = remember(signalSource, running) { GazeCnn.availableModels(context) }
+                if (models.isEmpty()) {
+                    Text(
+                        "No CNN models found. Side-load a .tflite into gaze_models/ (see docs/gaze_cnn.md).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    ChipSelector(
+                        label = "Model",
+                        options = models,
+                        selected = gazeModel.ifEmpty { models.first() },
+                        enabled = !running,
+                        onSelect = {
+                            gazeModel = it
+                            SessionConfig.gazeModelName = it
+                            AppSettings.save(context)
+                        },
+                    )
+                }
+            }
+            LabeledSwitch(
+                label = "Smoothing",
+                description = "Reduce jitter in the gaze signal.",
+                checked = filterEnabled,
+                enabled = !running,
+                onCheckedChange = { filterEnabled = it; SessionConfig.filterEnabled = it },
+            )
+            LabeledSwitch(
+                label = "Save raw video",
+                description = "Stores the camera video locally this session (off by default).",
+                checked = rawVideo,
+                enabled = !running,
+                onCheckedChange = { rawVideo = it; SessionConfig.rawVideoEnabled = it },
+            )
+            LabeledSwitch(
+                label = "Camera overlay",
+                description = "Show the face mesh + iris dots in Details, to check tracking.",
+                checked = overlayEnabled,
+                onCheckedChange = { overlayEnabled = it; OverlayConfig.enabled = it },
+            )
+            if (batteryExempt) {
+                StatRow("Background", "Unrestricted ✓")
+            } else {
+                OutlinedButton(
+                    onClick = { requestIgnoreBatteryOptimizations(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Allow background recording (battery)") }
+            }
+        }
+
+        SectionCard("Gaze calibration", "Improves where the gaze dot lands on screen.") {
+            StatRow(
+                "Status",
+                if (calModel != null) {
+                    "Calibrated" + (calError?.let { " · check err ${"%.3f".format(it)}" } ?: "")
+                } else {
+                    "Not calibrated"
+                },
+            )
+            Button(
+                onClick = { showCalibration = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Calibrate gaze") }
+        }
+
+        SectionCard("Saved data", "Export the most recent session, or browse all of them.") {
+            Button(
+                enabled = !running,
+                onClick = { saveLatestSessionToDownloads(context) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Save last session to Downloads") }
+            OutlinedButton(
+                enabled = !running,
+                onClick = { shareLatestSession(context) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Share last session CSV") }
+            OutlinedButton(
+                onClick = { showSessions = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("All sessions") }
+            summary?.let { s ->
+                if (!running) {
+                    HorizontalDivider()
+                    Text("Last session", style = MaterialTheme.typography.labelLarge)
+                    StatRow("Duration", "${"%.0f".format(s.durationSec)} s")
+                    StatRow("Saccades", "${s.saccades} (${s.saccadeRatePerMin.toInt()}/min)")
+                    StatRow("Fixations", "${s.fixations} (${s.fixationRatePerMin.toInt()}/min)")
+                    StatRow("Blinks", "${s.blinks} (${s.blinkRatePerMin.toInt()}/min)")
+                    StatRow("Mean reliability", "%.2f".format(s.meanReliability))
+                    StatRow("Tracking loss", "${"%.1f".format(s.trackingLossSec)} s")
+                }
+            }
+        }
+
+        var detailsExpanded by remember { mutableStateOf(false) }
+        SectionCard("Details & diagnostics") {
+            OutlinedButton(
+                onClick = { detailsExpanded = !detailsExpanded },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (detailsExpanded) "Hide details" else "Show details") }
+            if (detailsExpanded) {
+                StatRow("Frames logged", "${snapshot.frameCount}")
+                StatRow("Face", if (snapshot.faceDetected) "detected (${snapshot.landmarkCount} lm)" else "not detected")
+                StatRow("Blink L/R", "${"%.2f".format(snapshot.blinkLeft)} / ${"%.2f".format(snapshot.blinkRight)}")
+                StatRow("Analysed", "${benchmark.analysedFps.toInt()} fps · dropped ${benchmark.droppedFrames}")
+                StatRow(
+                    "Inference ms",
+                    "mean ${benchmark.latencyMeanMs.toInt()} · p50 ${benchmark.latencyP50Ms.toInt()} · p95 ${benchmark.latencyP95Ms.toInt()}",
+                )
+                signals?.let { s ->
+                    StatRow("L eye-local x/y", "${fmt(s.leftEye?.irisXLocal)} / ${fmt(s.leftEye?.irisYLocal)}")
+                    StatRow("R eye-local x/y", "${fmt(s.rightEye?.irisXLocal)} / ${fmt(s.rightEye?.irisYLocal)}")
+                    StatRow("Head y/p/r", headPoseText(s.headPose))
+                    StatRow("Reliability L/R", "${fmt(s.leftEye?.reliability)} / ${fmt(s.rightEye?.reliability)}")
+                }
+                StatRow("Events", "sacc ${events.saccades} · fix ${events.fixations} · blink ${events.blinks}")
+                StatRow("Head motion", events.headMotionLabel)
+                StatRow(
+                    "Session",
+                    "${session.sampleCount} samp · ${session.sensorSampleCount} sens · ${session.lossIntervalCount} loss · ${session.markerCount} marks${if (session.sensorsActive) " · sensors on" else " · sensors off"}",
+                )
+                Text(
+                    verdict(running, sinceLastSecs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (overlayEnabled) {
+                    Text(
+                        "Overlay — green = mesh, red = iris, yellow = gaze. Look around; red dots should follow your eyes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                            .background(Color.Black),
+                    ) {
+                        val of = overlay
+                        if (of != null && of.landmarks.size >= 2) {
+                            val w = size.width
+                            val h = size.height
+                            var i = 0
+                            while (i + 1 < of.landmarks.size) {
+                                // Mirror x to a selfie view (matches SignConvention); y is image-down.
+                                drawCircle(Color.Green, radius = 2f, center = Offset((1f - of.landmarks[i]) * w, of.landmarks[i + 1] * h))
+                                i += 2
+                            }
+                            for (idx in intArrayOf(of.leftIrisIndex, of.rightIrisIndex)) {
+                                val base = idx * 2
+                                if (base + 1 < of.landmarks.size) {
+                                    drawCircle(Color.Red, radius = 9f, center = Offset((1f - of.landmarks[base]) * w, of.landmarks[base + 1] * h))
+                                }
+                            }
+                        }
+                        // Calibrated point-of-gaze (normalised screen), when calibrated.
+                        gaze?.let { (gx, gy) ->
+                            drawCircle(Color.Yellow, radius = 14f, center = Offset(gx * size.width, gy * size.height))
+                        }
+                    }
+                }
+                var modelsExpanded by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = { modelsExpanded = !modelsExpanded },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (modelsExpanded) "Hide model comparison" else "Compare gaze models") }
+                if (modelsExpanded) {
+                    Text(
+                        "Reference snapshot — weights are research-only; verify upstream.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    GazeModels.all.forEachIndexed { i, m ->
+                        Text("${i + 1}. ${m.name}", fontWeight = FontWeight.Bold)
+                        Text("${m.publisher} · ${m.license} · ${m.year}", style = MaterialTheme.typography.bodySmall)
+                        Text("${m.accuracy} · ${m.size}", style = MaterialTheme.typography.bodySmall)
+                        Text("+ ${m.pros}", style = MaterialTheme.typography.bodySmall)
+                        Text("- ${m.cons}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
         if (showRationale) {
             AlertDialog(
                 onDismissRequest = { showRationale = false },
@@ -339,153 +532,6 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 },
             )
         }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            enabled = running,
-            onClick = { stopTrackingService(context) },
-        ) {
-            Text("Stop")
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                enabled = running && !paused,
-                onClick = { pauseTrackingService(context) },
-            ) { Text("Pause") }
-            Button(
-                enabled = running && paused,
-                onClick = { resumeTrackingService(context) },
-            ) { Text("Resume") }
-            Button(
-                enabled = running,
-                onClick = { markTrackingService(context) },
-            ) { Text("Mark") }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            enabled = !running,
-            onClick = { saveLatestSessionToDownloads(context) },
-        ) {
-            Text("Save session to Downloads")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            enabled = !running,
-            onClick = { shareLatestSession(context) },
-        ) {
-            Text("Share session CSV")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { showSessions = true },
-        ) {
-            Text("Sessions")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { showCalibration = true },
-        ) {
-            Text("Calibrate gaze")
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Text("Frames logged: ${snapshot.frameCount}")
-        Text("Running: ${formatDuration(runningSecs)}")
-        Text("Since last frame: ${formatSeconds(sinceLastSecs)} s")
-        Text("Approx rate: ${fps.toInt()} fps")
-        Text("Face: " + if (snapshot.faceDetected) "detected (${snapshot.landmarkCount} landmarks)" else "not detected")
-        Text("Blink L/R: ${"%.2f".format(snapshot.blinkLeft)} / ${"%.2f".format(snapshot.blinkRight)}")
-        Spacer(Modifier.height(12.dp))
-        Text("Benchmark — analysed ${benchmark.analysedFps.toInt()} fps, dropped ${benchmark.droppedFrames}")
-        Text("Inference ms: mean ${benchmark.latencyMeanMs.toInt()}, p50 ${benchmark.latencyP50Ms.toInt()}, p95 ${benchmark.latencyP95Ms.toInt()}")
-        signals?.let { s ->
-            Spacer(Modifier.height(8.dp))
-            Text("L eye-local x/y: ${fmt(s.leftEye?.irisXLocal)} / ${fmt(s.leftEye?.irisYLocal)}")
-            Text("R eye-local x/y: ${fmt(s.rightEye?.irisXLocal)} / ${fmt(s.rightEye?.irisYLocal)}")
-            Text("Head yaw/pitch/roll: ${headPoseText(s.headPose)}")
-        }
-        Text("Saccades ${events.saccades} · Fixations ${events.fixations} · Blinks ${events.blinks} · ${events.headMotionLabel}")
-        Text("Session: ${session.sampleCount} samples · ${session.sensorSampleCount} sensor · ${session.lossIntervalCount} loss · ${session.markerCount} marks · sensors ${if (session.sensorsActive) "on" else "off"}")
-        Text("Name: ${sessionName.ifBlank { "(unnamed — uses timestamp)" }}" + if (sessionNote.isNotBlank()) " · note: $sessionNote" else "")
-        summary?.let { s ->
-            if (!running) {
-                Spacer(Modifier.height(12.dp))
-                Text("Last session summary:")
-                Text("• Duration ${"%.0f".format(s.durationSec)} s · mean reliability ${"%.2f".format(s.meanReliability)} · loss ${"%.1f".format(s.trackingLossSec)} s")
-                Text("• Saccades ${s.saccades} (${s.saccadeRatePerMin.toInt()}/min) · mean amp ${"%.3f".format(s.meanSaccadeAmplitude)} · mean dur ${s.meanSaccadeDurationMs.toInt()} ms")
-                Text("• Fixations ${s.fixations} (${s.fixationRatePerMin.toInt()}/min) · mean dur ${s.meanFixationDurationMs.toInt()} ms")
-                Text("• Blinks ${s.blinks} (${s.blinkRatePerMin.toInt()}/min)")
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            when {
-                running && cameraLost -> "Tracking quality: CAMERA LOST — retrying"
-                running && paused -> "Tracking quality: PAUSED"
-                running && snapshot.faceDetected -> "Tracking quality: OK"
-                running -> "Tracking quality: FACE LOST"
-                else -> "Tracking quality: idle"
-            },
-        )
-        Text("Reliability L/R: ${fmt(signals?.leftEye?.reliability)} / ${fmt(signals?.rightEye?.reliability)}")
-        Text(
-            "Calibration: " + if (calModel != null) {
-                "calibrated" + (calError?.let { " (check err ${"%.3f".format(it)})" } ?: "")
-            } else {
-                "uncalibrated"
-            },
-        )
-        if (snapshot.resourceWarning.isNotEmpty()) {
-            Text("⚠ ${snapshot.resourceWarning}")
-        }
-        if (running) {
-            Text(
-                when (quality.label) {
-                    QualitySnapshot.LOW_LIGHT -> "Lighting: LOW — tracking may be unreliable (luma ${quality.luma.toInt()})"
-                    QualitySnapshot.FACE_LOST -> "Lighting: no face in view"
-                    QualitySnapshot.GOOD -> "Lighting: good (luma ${quality.luma.toInt()})"
-                    else -> "Lighting: —"
-                },
-            )
-        }
-        if (running && rawVideo) {
-            Text("● Recording raw video")
-        }
-        if (overlayEnabled) {
-            Spacer(Modifier.height(12.dp))
-            Text("Overlay (green = face mesh, red = iris). Look around — the red dots should follow your eyes.")
-            Spacer(Modifier.height(4.dp))
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .background(Color.Black),
-            ) {
-                val of = overlay
-                if (of != null && of.landmarks.size >= 2) {
-                    val w = size.width
-                    val h = size.height
-                    var i = 0
-                    while (i + 1 < of.landmarks.size) {
-                        // Mirror x to a selfie view (matches SignConvention); y is image-down.
-                        drawCircle(Color.Green, radius = 2f, center = Offset((1f - of.landmarks[i]) * w, of.landmarks[i + 1] * h))
-                        i += 2
-                    }
-                    for (idx in intArrayOf(of.leftIrisIndex, of.rightIrisIndex)) {
-                        val base = idx * 2
-                        if (base + 1 < of.landmarks.size) {
-                            drawCircle(Color.Red, radius = 9f, center = Offset((1f - of.landmarks[base]) * w, of.landmarks[base + 1] * h))
-                        }
-                    }
-                }
-                // Calibrated point-of-gaze (normalised screen), when calibrated.
-                gaze?.let { (gx, gy) ->
-                    drawCircle(Color.Yellow, radius = 14f, center = Offset(gx * size.width, gy * size.height))
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(verdict(running, sinceLastSecs))
     }
 }
 
