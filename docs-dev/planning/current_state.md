@@ -169,6 +169,14 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   user must train/obtain weights. UniGaze is **non-commercial** (ModelGo, NC even after conversion) and
   only the **-B** size is on-device-practical (H/L are 0.6-1.3 GB). As ever: weights are never committed
   and end-to-end gaze accuracy is on-device-validated.
+- **GUI redesign `052`+ (CI-green, 2026-06-26).** User asked for a clearer, easier-to-use GUI (primary)
+  and a slick/minimal look (secondary); chose a **structured single screen**. `052` adds a small Compose
+  UI kit (`ui/UiKit.kt`: `SectionCard`, `LabeledSwitch`, single-select `ChipSelector`, `StatRow`) and
+  rebuilds `ControlScreen` as titled cards (Recording hero with a prominent Start/Stop · Setup with
+  chips/switches · Calibration · Saved data · collapsible Details) — replacing selection-by-disabling,
+  tap-to-cycle toggles, ON/OFF text buttons and the unlabelled status wall. `053` (next) adds a top app
+  bar + routing tidy and polishes the Sessions / Calibration / Onboarding sub-screens. Presentation only
+  — no tracking / CSV / calibration / model changes.
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
   model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
   commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
@@ -241,3 +249,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `049_webeyetrack_profile.md` — WEB_EYE_TRACK multi-input profile (WebEyeTrack/BlazeGaze, MIT): GazeCnn.inferMulti, pure WebEyeTrackGeometry (quad/head-vector/origin) + tests, Android two-stage strip warp, service wiring (PoG -> calibration), Keras->TFLite recipe (CI green).
 - `050_open_gaze_pog_profile.md` — DUAL_EYE_POG multi-input profile (Open Gaze / Google / iTracker family): detection, pure OpenGazeGeometry (eye-corner lms + square crop) + tests, Android dual RGB-eye preprocessing (left flip, std=0.02), service wiring (cm PoG -> calibration), recipe + licensing reality (Open Gaze withdrawn; gaze-track unlicensed) (CI green; one test-threshold fix-forward).
 - `051_unigaze_full_face_profile.md` — FULL_FACE single-input profile (UniGaze-B / ETH-XGaze / MobileGaze / L2CS): detection, pure FaceCropGeometry + tests, Android 224x224 ImageNet-normalised face crop, service wiring (reuses GazeCnn.infer -> calibration), recipe + caveats (plain face box vs ETH-XGaze data-norm warp; -B only; ModelGo NC) (CI green).
+- `052_ui_restructure_main_screen.md` — main control screen restructured into titled Material-3 cards (Recording / Setup / Calibration / Saved data / collapsible Details) with selectable chips + switches + a prominent Start/Stop, via a new ui/UiKit.kt; replaces the cycling/disabled-as-selected toggles + the flat status wall. Presentation only (CI green).
