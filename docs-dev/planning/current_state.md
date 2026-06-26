@@ -174,9 +174,10 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   UI kit (`ui/UiKit.kt`: `SectionCard`, `LabeledSwitch`, single-select `ChipSelector`, `StatRow`) and
   rebuilds `ControlScreen` as titled cards (Recording hero with a prominent Start/Stop · Setup with
   chips/switches · Calibration · Saved data · collapsible Details) — replacing selection-by-disabling,
-  tap-to-cycle toggles, ON/OFF text buttons and the unlabelled status wall. `053` (next) adds a top app
-  bar + routing tidy and polishes the Sessions / Calibration / Onboarding sub-screens. Presentation only
-  — no tracking / CSV / calibration / model changes.
+  tap-to-cycle toggles, ON/OFF text buttons and the unlabelled status wall. `053` adds a Material-3
+  **top app bar** + centralised routing (per-screen title + Back), the Sessions list as cards, and
+  full-screen Calibration/Onboarding with their own insets. **GUI redesign complete** (052–053).
+  Presentation only — no tracking / CSV / calibration / model changes.
 - **Deferred larger efforts (research-scoped; need explicit go-ahead):** **training a clean gaze
   model** for the now-built CNN scaffolding (MIT WebEyeTrack/BlazeGaze-style architecture trained on
   commercially-clean/self-collected data — needs compute + data outside CI); a **high-fps (≥120 Hz)
@@ -250,3 +251,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `050_open_gaze_pog_profile.md` — DUAL_EYE_POG multi-input profile (Open Gaze / Google / iTracker family): detection, pure OpenGazeGeometry (eye-corner lms + square crop) + tests, Android dual RGB-eye preprocessing (left flip, std=0.02), service wiring (cm PoG -> calibration), recipe + licensing reality (Open Gaze withdrawn; gaze-track unlicensed) (CI green; one test-threshold fix-forward).
 - `051_unigaze_full_face_profile.md` — FULL_FACE single-input profile (UniGaze-B / ETH-XGaze / MobileGaze / L2CS): detection, pure FaceCropGeometry + tests, Android 224x224 ImageNet-normalised face crop, service wiring (reuses GazeCnn.infer -> calibration), recipe + caveats (plain face box vs ETH-XGaze data-norm warp; -B only; ModelGo NC) (CI green).
 - `052_ui_restructure_main_screen.md` — main control screen restructured into titled Material-3 cards (Recording / Setup / Calibration / Saved data / collapsible Details) with selectable chips + switches + a prominent Start/Stop, via a new ui/UiKit.kt; replaces the cycling/disabled-as-selected toggles + the flat status wall. Presentation only (CI green).
+- `053_ui_app_bar_and_subscreens.md` — Material-3 top app bar + centralised routing (AppRoot: per-screen title + Back); Sessions list rendered as cards; Onboarding/Calibration kept full-screen with their own system-bar insets. Presentation/navigation only (CI green).
