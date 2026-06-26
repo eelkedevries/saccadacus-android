@@ -155,7 +155,7 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
   now say "histogram-equalised" and carry an "Obtaining an MPIIGaze-style model" note (the official
   two-input + data-normalisation-warp path is the larger follow-up). Default iris/blendshape tracking
   is untouched (equalisation lives only in the CNN eye-patch path).
-- **Multi-model wiring `048`+ (in progress, 2026-06-25).** User asked to wire in several specific models.
+- **Multi-model wiring `048`–`051` (CI-green, 2026-06-25; all three wired).** User asked to wire in several specific models.
   `048` adds a model **input-profile abstraction**: `GazeCnn` detects the loaded model's input profile
   from its tensor shapes (`GazeModelProfiles.detect`), exposes `activeProfile`, and the eye-gray path
   runs only for `EYE_GRAY` — so a wrong-shaped side-loaded model is never mis-fed. Then one model family
@@ -240,3 +240,4 @@ Supporting research (non-binding) lives in `docs-dev/planning/`:
 - `048_gaze_model_input_profiles.md` — model input-profile abstraction: GazeCnn detects a model's input profile from its tensor shapes (pure GazeModelProfiles.detect + tests), eye-gray path gated on EYE_GRAY; foundation for multi-input models (CI green).
 - `049_webeyetrack_profile.md` — WEB_EYE_TRACK multi-input profile (WebEyeTrack/BlazeGaze, MIT): GazeCnn.inferMulti, pure WebEyeTrackGeometry (quad/head-vector/origin) + tests, Android two-stage strip warp, service wiring (PoG -> calibration), Keras->TFLite recipe (CI green).
 - `050_open_gaze_pog_profile.md` — DUAL_EYE_POG multi-input profile (Open Gaze / Google / iTracker family): detection, pure OpenGazeGeometry (eye-corner lms + square crop) + tests, Android dual RGB-eye preprocessing (left flip, std=0.02), service wiring (cm PoG -> calibration), recipe + licensing reality (Open Gaze withdrawn; gaze-track unlicensed) (CI green; one test-threshold fix-forward).
+- `051_unigaze_full_face_profile.md` — FULL_FACE single-input profile (UniGaze-B / ETH-XGaze / MobileGaze / L2CS): detection, pure FaceCropGeometry + tests, Android 224x224 ImageNet-normalised face crop, service wiring (reuses GazeCnn.infer -> calibration), recipe + caveats (plain face box vs ETH-XGaze data-norm warp; -B only; ModelGo NC) (CI green).
