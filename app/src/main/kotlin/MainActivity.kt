@@ -33,8 +33,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -77,9 +80,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ControlScreen(modifier = Modifier.padding(innerPadding))
-                }
+                AppRoot()
             }
         }
     }
@@ -90,27 +91,65 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class Screen { CONTROL, SESSIONS, CALIBRATION }
+
+/**
+ * Top-level routing + the Material-3 top app bar (prompt 053). Onboarding and the full-screen
+ * calibration render outside the [Scaffold] (calibration needs the whole screen); Control and Sessions
+ * render inside it under the app bar.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ControlScreen(modifier: Modifier = Modifier) {
-    var showSessions by remember { mutableStateOf(false) }
-    if (showSessions) {
-        SessionsScreen(modifier = modifier, onBack = { showSessions = false })
-        return
-    }
+fun AppRoot() {
     val context = LocalContext.current
     var onboardingDone by remember { mutableStateOf(AppSettings.isFirstRunDone(context)) }
     if (!onboardingDone) {
-        OnboardingScreen(modifier = modifier, onDone = {
+        OnboardingScreen(onDone = {
             AppSettings.setFirstRunDone(context)
             onboardingDone = true
         })
         return
     }
-    var showCalibration by remember { mutableStateOf(false) }
-    if (showCalibration) {
-        CalibrationScreen(modifier = modifier, onBack = { showCalibration = false })
+    var screen by remember { mutableStateOf(Screen.CONTROL) }
+    if (screen == Screen.CALIBRATION) {
+        CalibrationScreen(onBack = { screen = Screen.CONTROL })
         return
     }
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            if (screen == Screen.SESSIONS) {
+                TopAppBar(
+                    title = { Text("Sessions") },
+                    navigationIcon = {
+                        TextButton(onClick = { screen = Screen.CONTROL }) { Text("Back") }
+                    },
+                )
+            } else {
+                TopAppBar(title = { Text("Saccadacus") })
+            }
+        },
+    ) { innerPadding ->
+        val screenModifier = Modifier.padding(innerPadding)
+        if (screen == Screen.SESSIONS) {
+            SessionsScreen(modifier = screenModifier)
+        } else {
+            ControlScreen(
+                modifier = screenModifier,
+                onOpenSessions = { screen = Screen.SESSIONS },
+                onOpenCalibration = { screen = Screen.CALIBRATION },
+            )
+        }
+    }
+}
+
+@Composable
+fun ControlScreen(
+    modifier: Modifier = Modifier,
+    onOpenSessions: () -> Unit,
+    onOpenCalibration: () -> Unit,
+) {
+    val context = LocalContext.current
     val snapshot by TrackingStats.state.collectAsState()
     val benchmark by BenchmarkStats.state.collectAsState()
     val signals by SignalStats.state.collectAsState()
@@ -185,15 +224,6 @@ fun ControlScreen(modifier: Modifier = Modifier) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Saccadacus", style = MaterialTheme.typography.headlineSmall)
-            Text(
-                "Eye & head movement recorder",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
         SectionCard("Recording") {
             val stateLine = when {
                 running && cameraLost -> "Camera lost — retrying…"
@@ -387,7 +417,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 },
             )
             Button(
-                onClick = { showCalibration = true },
+                onClick = onOpenCalibration,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Calibrate gaze") }
         }
@@ -404,7 +434,7 @@ fun ControlScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Share last session CSV") }
             OutlinedButton(
-                onClick = { showSessions = true },
+                onClick = onOpenSessions,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("All sessions") }
             summary?.let { s ->
@@ -540,24 +570,32 @@ fun OnboardingScreen(modifier: Modifier = Modifier, onDone: () -> Unit) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Welcome to Saccadacus")
-        Spacer(Modifier.height(12.dp))
+        Text("Welcome to Saccadacus", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Saccadacus records your eye and head movements from the front camera while you use " +
-                "your phone, to study reading and attention.",
+            "Saccadacus records your eye and head movements from the front camera while you use your " +
+                "phone, to study reading and attention.",
+            style = MaterialTheme.typography.bodyMedium,
         )
-        Spacer(Modifier.height(8.dp))
-        Text("• Recording only ever starts when you press Start, and a notification and the camera indicator stay visible throughout.")
-        Spacer(Modifier.height(8.dp))
-        Text("• Everything is processed on your device — nothing is uploaded. Video is never recorded unless you explicitly turn it on.")
-        Spacer(Modifier.height(8.dp))
-        Text("• It needs the camera permission to see your eyes and the notification permission to show the ongoing recording.")
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onDone) { Text("Got it") }
+        SectionCard("How it works") {
+            Text(
+                "• Recording only starts when you press Start; a notification and the camera indicator stay visible throughout.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "• Everything is processed on your device — nothing is uploaded. Video is never recorded unless you turn it on.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "• It needs the camera permission to see your eyes and the notification permission to show the ongoing recording.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Got it") }
     }
 }
 
@@ -622,7 +660,7 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                 drawCircle(Color.Red, radius = 24f, center = Offset(tx * size.width, ty * size.height))
             }
         }
-        Column(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+        Column(modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(16.dp)) {
             Text(status, color = Color.White)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -648,7 +686,7 @@ fun CalibrationScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
 }
 
 @Composable
-fun SessionsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+fun SessionsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var sessions by remember { mutableStateOf(listSessionCsvs(context)) }
     var pendingDelete by remember { mutableStateOf<File?>(null) }
@@ -657,26 +695,45 @@ fun SessionsScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(onClick = onBack) { Text("← Back") }
-        Spacer(Modifier.height(12.dp))
-        Text("Saved sessions (${sessions.size})")
+        Text("${sessions.size} saved session(s)", style = MaterialTheme.typography.titleMedium)
         if (sessions.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text("No saved sessions yet. Record and stop a session first.")
+            Text(
+                "No saved sessions yet. Record and stop a session, then it appears here.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         sessions.forEach { file ->
-            Spacer(Modifier.height(12.dp))
             val meta = sessionMeta(file)
-            Text(meta["session_name"]?.takeIf { it.isNotBlank() } ?: "(unnamed)")
-            meta["session_note"]?.takeIf { it.isNotBlank() }?.let { Text("note: $it") }
-            Text("${file.name} · ${file.length() / 1024} kB · ${formatStamp(file.lastModified())}")
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { saveSessionToDownloads(context, file) }) { Text("Save") }
-                Button(onClick = { shareFile(context, file) }) { Text("Share") }
-                Button(onClick = { pendingDelete = file }) { Text("Delete") }
+            SectionCard(meta["session_name"]?.takeIf { it.isNotBlank() } ?: "(unnamed)") {
+                meta["session_note"]?.takeIf { it.isNotBlank() }?.let {
+                    Text("note: $it", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    "${file.name} · ${file.length() / 1024} kB · ${formatStamp(file.lastModified())}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    OutlinedButton(
+                        onClick = { saveSessionToDownloads(context, file) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Save") }
+                    OutlinedButton(
+                        onClick = { shareFile(context, file) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Share") }
+                    OutlinedButton(
+                        onClick = { pendingDelete = file },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Delete") }
+                }
             }
         }
     }
