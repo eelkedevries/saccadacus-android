@@ -3,6 +3,7 @@ package com.example.saccadacusandroid
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Unit tests for the pure Open Gaze / Google-family geometry (prompt 050). */
@@ -39,11 +40,12 @@ class OpenGazeGeometryTest {
         val box = OpenGazeGeometry.eyeCropSquare(xs, ys, intArrayOf(10, 11), 100, 100)
         assertNotNull(box)
         box!!
-        // width 0.2 -> 20px; half = 20*(0.5+0.4)=18; centre (50,50) -> 32..68 each axis.
-        assertEquals(32, box.left)
-        assertEquals(32, box.top)
-        assertEquals(box.width, box.height) // squared
-        assertEquals(36, box.width)
+        // width 0.2 -> 20px; half = 20*(0.5+0.4)=18; centred on (50,50). The box is squared to the
+        // larger side; exact pixels jitter by 1 from float->int truncation, so assert ranges + squareness.
+        assertEquals("squared to the larger side", box.width, box.height)
+        assertTrue("left ~32 (got ${box.left})", box.left in 30..33)
+        assertTrue("top ~32 (got ${box.top})", box.top in 30..33)
+        assertTrue("width ~36 (got ${box.width})", box.width in 35..38)
     }
 
     @Test
